@@ -1,0 +1,65 @@
+/* Agent HQ additions: the new-ticket box, drawn like the Game Boy text box over the canvas. */
+:root {
+  /* PAL_BG_TEXT after the renderer's GBC colour correction */
+  --gb-paper: #f0daa5;
+  --gb-mid: #64361e;
+  --gb-ink: #000;
+}
+
+.screen-wrap { position: relative; line-height: 0; }
+
+#ticket-box {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 10px 14px;
+  line-height: 1.6;
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: clamp(8px, 0.8vw + 4px, 12px);
+  max-height: 100%;
+  overflow: auto;
+  color: var(--gb-ink);
+  background: var(--gb-paper);
+  border: 6px double var(--gb-ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+#ticket-box[hidden], .tb-step[hidden] { display: none; }
+
+#ticket-box label { display: block; margin-bottom: 6px; }
+
+#tb-title, #tb-body {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: var(--gb-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid var(--gb-mid);
+  padding: 4px 0;
+  outline: none;
+  resize: none;
+  caret-color: var(--gb-ink);
+}
+#tb-title:focus-visible, #tb-body:focus-visible { border-bottom-color: var(--gb-ink); }
+
+#tb-error { margin: 6px 0 0; color: var(--gb-mid); min-height: 1em; font-size: 0.85em; }
+#tb-error:empty { display: none; }
+.tb-foot { margin: 6px 0 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tb-hint { font-size: 0.7em; color: var(--gb-mid); }
+#tb-cancel {
+  font: inherit;
+  font-size: 0.7em;
+  color: var(--gb-ink);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+}
+#tb-cancel:hover, #tb-cancel:focus-visible { text-decoration: underline; outline: none; }
+
+@media (max-width: 480px) {
+  #ticket-box { padding: 8px 10px; }
+}

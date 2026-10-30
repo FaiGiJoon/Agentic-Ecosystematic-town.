@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
+  <meta name="referrer" content="no-referrer">
+  <title>Agent HQ</title>
+  <meta name="theme-color" content="#0b0f1a">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="town/town.css">
+  <link rel="stylesheet" href="town/hq.css">
+</head>
+<body>
+  <header class="bar">
+    <h1 class="who">AGENT HQ <span>Goldenrod City</span></h1>
+  </header>
+
+  <main class="stage">
+    <div class="screen-wrap">
+      <canvas id="screen" width="320" height="144" role="img"
+        aria-label="Agent HQ in Goldenrod City. Walk with the arrow keys or click where to go, hold Space to run, press Z or Enter to talk and open doors. The ticket board is in the POKéMON CENTER."></canvas>
+
+      <form id="ticket-box" hidden aria-label="New ticket" novalidate>
+        <div class="tb-step" data-step="title">
+          <label for="tb-title">TITLE</label>
+          <input id="tb-title" maxlength="80" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="tb-step" data-step="body" hidden>
+          <label for="tb-body">DETAILS</label>
+          <textarea id="tb-body" rows="3" spellcheck="false"></textarea>
+        </div>
+        <p id="tb-error" role="alert"></p>
+        <p class="tb-foot"><span class="tb-hint" id="tb-hint">ENTER next  ESC cancel</span> <button type="button" id="tb-cancel">CANCEL</button></p>
+      </form>
+    </div>
+    <p class="loading" aria-hidden="true">Loading Agent HQ…</p>
+    <p class="failed-msg">The town could not load. Is the server running?</p>
+    <p id="status" class="sr-only" aria-live="polite"></p>
+
+    <div class="pad" aria-hidden="true">
+      <div class="dpad">
+        <button data-btn="up" class="up">▲</button>
+        <button data-btn="left" class="left">◀</button>
+        <button data-btn="right" class="right">▶</button>
+        <button data-btn="down" class="down">▼</button>
+      </div>
+      <div class="ab">
+        <button data-btn="B" class="b">B</button>
+        <button data-btn="A" class="a">A</button>
+      </div>
+    </div>
+    <p class="help">Arrows / WASD or click walk · hold Space run · Z / Enter talk · X / Esc back</p>
+  </main>
+
+  <noscript>
+    <section class="noscript">
+      <h2>Agent HQ</h2>
+      <p>The ticket board lives in a walkable Goldenrod City and needs JavaScript.</p>
+    </section>
+  </noscript>
+
+  <script type="module" src="town/main.js"></script>
+</body>
+</html>
