@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-UK9O+rbB3KhDsGQrE55qyNAJCpV7WHc47zV2U5f4bE4='; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
   <meta name="referrer" content="no-referrer">
   <title>Koala Grove</title>
-  <meta name="theme-color" content="#151a26">
+  <meta name="theme-color" content="#0f1520">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -16,22 +16,63 @@
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
+  <!-- icons: one inline sprite, so they are crisp at any size and look the same everywhere -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-koala" viewBox="0 0 24 24"><circle cx="5.5" cy="7" r="3.2" fill="currentColor" opacity=".55"/><circle cx="18.5" cy="7" r="3.2" fill="currentColor" opacity=".55"/><ellipse cx="12" cy="13" rx="7.6" ry="7.2" fill="currentColor"/><ellipse cx="12" cy="12.4" rx="2.1" ry="2.8" fill="#12201a"/><circle cx="8.3" cy="10.8" r="1" fill="#12201a"/><circle cx="15.7" cy="10.8" r="1" fill="#12201a"/></symbol>
+      <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19c0-8.5 5-14 14-14 0 9-5.5 14-14 14zM5 19c3-5 6.2-8 10-10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-eat" viewBox="0 0 24 24"><path d="M5 19c0-8.5 5-14 14-14 0 9-5.5 14-14 14zM5 19c3-5 6.2-8 10-10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-blossom" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><circle cx="12" cy="12" r="2.1"/><path d="M12 9.9C10.4 8 10.4 5 12 3.2c1.6 1.8 1.6 4.8 0 6.7zM14 11.2c2.5-.8 5-.2 6.5 1.4-1.6 1.7-4.4 2-6.6.8zM13.2 14c1.7 2 1.7 4.7.3 6.7-2.2-.9-3.3-3.6-2.6-6zM10.8 14c.7 2.4-.4 5.1-2.6 6-1.4-2-1.4-4.7.3-6.700zM10 11.2c-.7 1.2-3.6 1.1-6.6-.8 1.500-1.600 4-2.200 6.500-1.400z"/></g></symbol>
+      <symbol id="i-pebble" viewBox="0 0 24 24"><path d="M4.5 14.5c-.8-4 2.200-8 7.500-8s8.300 3.200 7.500 8c-.5 2.800-3.300 4.500-7.500 4.500s-7-1.700-7.500-4.500z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 11.500c1-.8 2.200-1.100 3.400-1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".6"/></symbol>
+      <symbol id="i-ball" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.800"/><path d="M3.200 12h17.600M12 3.200c3.200 3 3.200 14.600 0 17.600M12 3.200c-3.200 3-3.200 14.600 0 17.600"/></g></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.800"/><path d="M3.200 12h17.600M12 3.200c3.200 3 3.200 14.600 0 17.600M12 3.200c-3.200 3-3.200 14.600 0 17.600"/></g></symbol>
+      <symbol id="i-feather" viewBox="0 0 24 24"><path d="M20 4c-7.500 0-12.500 5-12.500 12L4.500 20M8 16c4.500 0 9.500-4.200 9.500-10M10.500 13h5.500" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-nap" viewBox="0 0 24 24"><path d="M20 14.500A8 8 0 019.500 4 8 8 0 1020 14.500z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.500A8 8 0 019.500 4 8 8 0 1020 14.500z" fill="currentColor"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.200" fill="currentColor"/><path d="M12 2.500v2.200M12 19.300v2.200M2.500 12h2.200M19.300 12h2.200M5.300 5.300l1.500 1.500M17.200 17.200l1.500 1.500M5.300 18.700l1.500-1.500M17.200 6.800l1.500-1.500"/></g></symbol>
+      <symbol id="i-climb" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6M6 20l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500" fill="currentColor"/></symbol>
+      <symbol id="i-walk" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.500" r="1.800"/><path d="M9 21l2.500-6.500L9 12l1.500-4.500 3-1 3 3.500M11.500 14.500l3 1.800.8 4.200M10.500 7.500L7.500 10"/></g></symbol>
+      <symbol id="i-mountain" viewBox="0 0 24 24"><path d="M2.5 19.500l6.500-11 4 6.500 2.500-3.500 6 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/></g></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="3.200" stroke-linecap="round"/></symbol>
+      <symbol id="i-playbtn" viewBox="0 0 24 24"><path d="M8 5.500l11 6.500-11 6.500z" fill="currentColor" stroke="currentColor" stroke-width="1.500" stroke-linejoin="round"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.200"/><path d="M12 2.800v2.600M12 18.600v2.600M2.800 12h2.600M18.600 12h2.600M5.500 5.500l1.800 1.800M16.700 16.700l1.800 1.800M5.500 18.500l1.800-1.800M16.700 7.300l1.800-1.800"/></g></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    </defs>
+  </svg>
+
   <div id="stage"></div>
-  <div id="boot">Connecting to Agent HQ…</div>
+  <div id="boot">Waking up the grove…</div>
 
   <header id="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">❦</span>
+      <svg class="logo" aria-hidden="true"><use href="#i-koala"/></svg>
       <div>
         <div class="title">Koala Grove</div>
-        <div class="sub" id="clock">Day 1 · 08:00</div>
+        <div class="sub"><svg class="ico" id="clock-ico" aria-hidden="true"><use href="#i-sun"/></svg><span id="clock">Day 1 · 08:00</span></div>
       </div>
     </div>
     <a class="back" href="../">◀ Goldenrod</a>
     <a class="back" href="../district/">District</a>
     <div class="chips" id="chips"></div>
+    <button id="view" class="back" type="button" title="Switch camera view (B)">Horizon</button>
     <button id="mode" class="back" type="button">Walking</button>
-    <button id="play" class="playbtn" type="button">▶ Play</button>
+    <button id="play" class="playbtn" type="button">Play</button>
+    <button id="settings" class="iconbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="settings-pop" title="Graphics settings"><svg class="ico" aria-hidden="true"><use href="#i-gear"/></svg><span class="sr-only">Graphics settings</span></button>
+    <div id="settings-pop" role="dialog" aria-label="Graphics settings" hidden>
+      <h2>Graphics</h2>
+      <div class="seg" role="group" aria-label="Quality">
+        <button type="button" data-q="auto">Auto</button>
+        <button type="button" data-q="low">Low</button>
+        <button type="button" data-q="medium">Medium</button>
+        <button type="button" data-q="high">High</button>
+      </div>
+      <p id="q-now" class="q-note"></p>
+      <label class="check"><input type="checkbox" id="fps-toggle"> Show frame rate</label>
+      <p class="q-note">Auto lowers the resolution and then the effects if the game runs slowly, and brings them back when it can. Texture sharpness is set when the page loads.</p>
+    </div>
+    <div id="fps" hidden></div>
   </header>
 
   <aside id="panel">
@@ -54,6 +95,7 @@
 
   <div id="intro" hidden>
     <div class="intro-card">
+      <svg class="intro-logo" aria-hidden="true"><use href="#i-koala"/></svg>
       <h1>Koala Grove</h1>
       <p class="lede">Mallee and Bramble are asleep in their grove. Both are real AI agents: every move they make and every word they say is a model decision, paid for in real tokens.</p>
       <p class="fine" id="intro-cap"></p>

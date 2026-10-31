@@ -6,7 +6,8 @@ import { fmtUsd, fmtTokens, statusOf } from './view.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const ITEM_GLYPH = { leaf: '🍃', blossom: '🌸', pebble: '🪨', ball: '⚽', feather: '🪶' };
+const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></svg>`;
+const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
   approach: 'keeping company', give: 'sharing', sit: 'sitting',
@@ -40,7 +41,7 @@ export function createUI({ scene, api }) {
   const modeBtn = $('#mode');
   const setMode = (m) => {
     scene.setMode(m);
-    modeBtn.textContent = m === 'walk' ? 'Walking' : 'Watching';
+    modeBtn.innerHTML = m === 'walk' ? `${ICON('i-walk')}Walking` : `${ICON('i-eye')}Watching`;
     modeBtn.title = m === 'walk' ? 'Switch to watching (V)' : 'Switch to walking (V)';
     $('#hint').textContent = m === 'walk'
       ? 'WASD or click the grass to walk, drag to look, E or click a koala to visit, V to watch'
@@ -53,7 +54,11 @@ export function createUI({ scene, api }) {
     if (e.target.closest?.('input, textarea, button')) return;
     const k = e.key.toLowerCase();
     if (k === 'v') setMode(scene.mode === 'walk' ? 'watch' : 'walk');
-    if (k === 'escape') select(null);
+    if (k === 'b') toggleView();
+    if (k === 'escape') {
+      select(null);
+      pop.hidden = true;
+    }
     if (k === 'e') {
       const me = scene.visitor.root.position;
       let best = null;
@@ -65,6 +70,51 @@ export function createUI({ scene, api }) {
       else toast('Walk closer to a koala first.');
     }
   });
+
+  // --- camera view: the horizon (sky, sun, moon) or a high overview (landmarks, koalas) ---
+  const viewBtn = $('#view');
+  const markView = () => {
+    viewBtn.innerHTML = scene.view === 'horizon' ? `${ICON('i-mountain')}Overview` : `${ICON('i-sun')}Horizon`;
+    viewBtn.title = scene.view === 'horizon' ? 'Fly up to see the whole grove (B)' : 'Back to the horizon: sky, sun and moon (B)';
+  };
+  const toggleView = () => {
+    scene.setView(scene.view === 'horizon' ? 'overview' : 'horizon');
+    markView();
+  };
+  viewBtn.addEventListener('click', toggleView);
+  markView();
+
+  // --- graphics settings ---------------------------------------------------------------
+  const pop = $('#settings-pop');
+  const gear = $('#settings');
+  const fpsEl = $('#fps');
+  const describe = () => `Drawing at ${scene.tier} quality${scene.scale < 1 ? `, ${Math.round(scene.scale * 100)}% resolution` : ''}.`;
+  function markQuality() {
+    for (const b of pop.querySelectorAll('[data-q]')) b.setAttribute('aria-pressed', String(b.dataset.q === scene.pref));
+    $('#q-now').textContent = scene.pref === 'auto' ? `Auto: ${describe()}` : describe();
+  }
+  gear.addEventListener('click', () => {
+    pop.hidden = !pop.hidden;
+    gear.setAttribute('aria-expanded', String(!pop.hidden));
+    markQuality();
+  });
+  for (const b of pop.querySelectorAll('[data-q]')) {
+    b.addEventListener('click', () => {
+      scene.setQuality(b.dataset.q);
+      markQuality();
+    });
+  }
+  $('#fps-toggle').addEventListener('change', (e) => (fpsEl.hidden = !e.target.checked));
+  addEventListener('pointerdown', (e) => {
+    if (!pop.hidden && !e.target.closest('#settings-pop, #settings')) {
+      pop.hidden = true;
+      gear.setAttribute('aria-expanded', 'false');
+    }
+  });
+  scene.onTierChange = ({ tier, scale, from }) => {
+    markQuality();
+    toast(`Smoothing the picture: ${tier} quality${scale < 1 ? `, ${Math.round(scale * 100)}% resolution` : ''}`);
+  };
 
   // --- side panel ----------------------------------------------------------------------
   for (const b of document.querySelectorAll('#tabs button')) {
@@ -100,12 +150,12 @@ export function createUI({ scene, api }) {
     <div class="cost-note">Giving, saying and patting are free. The koala reacts on its next decision, and that is a real model call.</div>`;
   insp.querySelector('.close').addEventListener('click', () => select(null));
   const give = insp.querySelector('.give');
-  for (const item of Object.keys(ITEM_GLYPH)) {
+  for (const item of Object.keys(ITEM_ICON)) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'item';
     b.title = `Give a ${item}`;
-    b.innerHTML = `<span aria-hidden="true">${ITEM_GLYPH[item]}</span>${item}`;
+    b.innerHTML = `${ICON(ITEM_ICON[item])}<span>${item}</span>`;
     b.addEventListener('click', () => act({ kind: 'give', item }, `Gave ${name(selected)} a ${item}.`));
     give.append(b);
   }
@@ -292,11 +342,14 @@ export function createUI({ scene, api }) {
       <div class="chip status ${st.key}" title="${esc(st.text)}"><i></i>${esc({ live: 'Live', thinking: 'Thinking', paused: 'Paused', capped: 'Cap reached', away: 'Waiting', offline: 'Offline' }[st.key])}</div>
       <div class="chip real" title="Real spend today, against GROVE_DAY_USD">Today <b>${fmtUsd(u.today.cost)}</b> / ${fmtUsd(u.dayUsd)}</div>
       <div class="chip real" title="Real tokens today, in and out">Tokens <b>${fmtTokens(u.today.tokens_in + u.today.tokens_out)}</b></div>`;
-    playBtn.textContent = state.playing ? '❚❚ Pause' : '▶ Play';
+    playBtn.innerHTML = state.playing ? `${ICON('i-pause')}Pause` : `${ICON('i-playbtn')}Play`;
     playBtn.classList.toggle('on', !state.playing);
     playBtn.title = state.playing ? 'Pause: no more model calls' : 'Play: the koalas start making real model calls';
     $('#status-line').textContent = st.text;
     $('#clock').textContent = state.clock.label;
+    const night = state.clock.phase === 'night';
+    $('#clock-ico use').setAttribute('href', night ? '#i-moon' : '#i-sun');
+    $('#clock-ico').parentElement.classList.toggle('night', night);
   }
 
   function draw() {
@@ -328,8 +381,10 @@ export function createUI({ scene, api }) {
     },
     tick(dt) {
       second += dt;
-      if (second < 1 || !state) return;
+      if (second < 1) return;
       second = 0;
+      if (!fpsEl.hidden) fpsEl.textContent = `${Math.round(scene.fps)} fps · ${scene.tier}${scene.scale < 1 ? ` · ${Math.round(scene.scale * 100)}%` : ''}`;
+      if (!state) return;
       for (const el of document.querySelectorAll('[data-next]')) {
         const k = state.koalas.find((x) => x.id === el.dataset.next);
         if (k) el.textContent = nextIn(k);

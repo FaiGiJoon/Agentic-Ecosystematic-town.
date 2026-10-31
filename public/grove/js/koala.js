@@ -1,31 +1,37 @@
-// A low-poly koala: built from flat-shaded primitives, walked and posed in code.
-// The scene tells it where to be and what it is doing; this file only animates.
+// A koala: smooth ellipsoid body parts, each wrapped in shell fur (instanced shells cut by a
+// strand texture), with a muzzle and glossy nose, eyes with catch-lights, big fluffy ears,
+// claws and a prop each. Posed and walked in code: the scene says where to be and what to do.
 
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { furMaterial } from './gfx/materials.js';
 
-const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0, flatShading: true, ...extra });
-const blob = (r, detail, mat, s = [1, 1, 1]) => {
-  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, detail), mat);
-  m.scale.set(...s);
-  m.castShadow = true;
-  return m;
-};
+const TAU = Math.PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
 const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
 const angleTo = (a, b) => {
-  let d = (b - a) % (Math.PI * 2);
-  if (d > Math.PI) d -= Math.PI * 2;
-  if (d < -Math.PI) d += Math.PI * 2;
+  let d = (b - a) % TAU;
+  if (d > Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
   return d;
 };
 
 const CREAM = '#efe7da';
 const WALK = 2.1;
 const CLIMB = 1.5;
+const MAX_SHELLS = 6;
+
+// An ellipsoid with its poles pointing sideways, so the fur texture's seams and pinch points
+// end up under the arms and ears instead of on top of the head.
+function ellipsoid(r, sx = 1, sy = 1, sz = 1, seg = 28) {
+  const g = new THREE.SphereGeometry(r, seg, Math.round(seg * 0.72));
+  g.rotateZ(Math.PI / 2);
+  g.scale(sx, sy, sz);
+  return g;
+}
 
 export class Koala {
-  constructor({ id, name, color }) {
+  constructor({ id, name, color }, { tex, groundY = () => 0 } = {}) {
     this.id = id;
     this.name = name;
     this.color = color;
@@ -35,87 +41,176 @@ export class Koala {
     this.path = [];
     this.anim = 'idle';
     this.heading = 0;
-    this.face = null; // where to look once arrived (angle), or null
+    this.face = null;
     this.moving = false;
     this.blink = 2 + Math.random() * 3;
     this.thinking = false;
+    this.groundY = groundY;
+    this.stepped = false;
+    this.lastW = 0;
+    this.furMats = [];
+    this.furMeshes = [];
 
-    const fur = flat(color);
-    const dark = flat('#3b3a3f');
     const root = (this.root = new THREE.Group());
     const rig = (this.rig = new THREE.Group());
     root.add(rig);
+    // the server's colour is a cool grey for the name tag; the fur is warmed a little
+    const base = new THREE.Color(color).lerp(new THREE.Color('#b9a68e'), 0.3);
+    const cream = new THREE.Color(CREAM);
 
-    this.torso = blob(0.6, 1, fur, [1, 1.12, 0.92]);
+    // A solid, shadow-casting body part with fur shells over it.
+    const fur = (geo, tint, { length = 0.045, density = 1.3, parent = rig, tip = null } = {}) => {
+      const grp = new THREE.Group();
+      const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(tint).multiplyScalar(0.8), roughness: 0.97 }));
+      body.castShadow = true;
+      body.receiveShadow = true;
+      grp.add(body);
+      if (tex) {
+        const mat = furMaterial({ color: tint, tip, tex: tex.fur, shells: MAX_SHELLS, length, density });
+        const shells = new THREE.InstancedMesh(geo, mat, MAX_SHELLS);
+        const m4 = new THREE.Matrix4();
+        for (let i = 0; i < MAX_SHELLS; i++) shells.setMatrixAt(i, m4);
+        shells.frustumCulled = false;
+        shells.receiveShadow = true;
+        shells.raycast = () => {};
+        grp.add(shells);
+        this.furMats.push(mat);
+        this.furMeshes.push(shells);
+      }
+      parent.add(grp);
+      return grp;
+    };
+
+    this.torso = fur(ellipsoid(0.6, 1, 1.12, 0.92), base, { length: 0.05, density: 0.85 });
     this.torso.position.y = 0.68;
-    const belly = blob(0.44, 1, flat(CREAM), [0.92, 1.05, 0.5]);
+    const belly = fur(ellipsoid(0.44, 0.92, 1.05, 0.5), cream, { length: 0.05, density: 0.75 });
     belly.position.set(0, 0.62, 0.3);
-    rig.add(this.torso, belly);
 
     const head = (this.head = new THREE.Group());
     head.position.set(0, 1.36, 0.08);
-    head.add(blob(0.5, 1, fur, [1.18, 0.96, 0.96]));
+    fur(ellipsoid(0.5, 1.18, 0.96, 0.96, 32), base, { parent: head, length: 0.048, density: 0.8 });
+    const muzzle = fur(ellipsoid(0.2, 1.25, 0.9, 0.9), cream, { parent: head, length: 0.03, density: 0.6 });
+    muzzle.position.set(0, -0.1, 0.4);
+    for (const s of [-1, 1]) {
+      const cheek = fur(ellipsoid(0.15, 1, 0.9, 0.8), cream, { parent: head, length: 0.07, density: 0.55 });
+      cheek.position.set(s * 0.42, -0.1, 0.24);
+      cheek.rotation.z = s * 0.4;
+    }
     this.ears = [-1, 1].map((s) => {
       const ear = new THREE.Group();
       ear.position.set(s * 0.52, 0.28, -0.02);
-      ear.add(blob(0.3, 1, fur, [1, 1, 0.42]));
-      const inner = blob(0.19, 1, flat('#f6eee6'), [1, 1, 0.3]);
-      inner.position.z = 0.08;
-      ear.add(inner);
+      fur(ellipsoid(0.3, 1, 1, 0.42, 22), base, { parent: ear, length: 0.04, density: 0.5 });
+      const inner = fur(ellipsoid(0.2, 1, 1, 0.3, 20), cream, { parent: ear, length: 0.085, density: 0.4 });
+      inner.position.z = 0.075;
       head.add(ear);
       return ear;
     });
-    const nose = blob(0.17, 1, flat('#2a2a30', { roughness: 0.5 }), [0.82, 1.3, 0.75]);
-    nose.position.set(0, -0.05, 0.47);
+    const noseMat = new THREE.MeshPhysicalMaterial({ color: '#17171b', roughness: 0.24, clearcoat: 0.7, clearcoatRoughness: 0.2 });
+    const nose = new THREE.Mesh(ellipsoid(0.17, 0.82, 1.28, 0.75, 20), noseMat);
+    nose.position.set(0, 0.0, 0.56);
+    nose.castShadow = true;
     head.add(nose);
+    const eyeMat = new THREE.MeshPhysicalMaterial({ color: '#0e0e12', roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const glint = new THREE.MeshBasicMaterial({ color: '#ffffff' });
     this.eyes = [-1, 1].map((s) => {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(0.062, 8, 6), flat('#141418', { roughness: 0.3 }));
-      e.position.set(s * 0.21, 0.09, 0.43);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.064, 16, 12), eyeMat);
+      e.position.set(s * 0.21, 0.09, 0.45);
+      const g = new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), glint);
+      g.position.set(0.022 * s + 0.01, 0.028, 0.05);
+      e.add(g);
       head.add(e);
       return e;
     });
-    // Mallee wears a little orange scarf, Bramble a gum leaf on the head.
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.007, 6, 14, Math.PI), new THREE.MeshBasicMaterial({ color: '#2a2024' }));
+    mouth.rotation.z = Math.PI;
+    mouth.position.set(0, -0.19, 0.55);
+    head.add(mouth);
+
+    // Mallee wears a woven orange scarf; Bramble a gum leaf tucked behind one ear.
     if (id === 'mallee') {
-      const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.09, 6, 14), flat('#e88a3c'));
+      const cloth = tex ? tex.cloth.clone() : null;
+      if (cloth) {
+        cloth.repeat.set(7, 1);
+        cloth.needsUpdate = true;
+      }
+      const scarfMat = new THREE.MeshStandardMaterial({ color: '#e8873a', roughness: 0.85, normalMap: cloth, normalScale: new THREE.Vector2(0.9, 0.9) });
+      const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 14, 32), scarfMat);
       scarf.rotation.x = Math.PI / 2;
       scarf.position.set(0, 1.04, 0.04);
-      rig.add(scarf);
+      const knot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), scarfMat);
+      knot.position.set(0.22, 0.98, 0.34);
+      const tailGeo = new THREE.BoxGeometry(0.12, 0.34, 0.035, 2, 5, 1);
+      const tp = tailGeo.attributes.position;
+      for (let i = 0; i < tp.count; i++) tp.setZ(i, tp.getZ(i) + Math.sin(tp.getY(i) * 12) * 0.018);
+      tailGeo.computeVertexNormals();
+      for (const [x, rz] of [[0.2, -0.25], [0.3, 0.2]]) {
+        const t = new THREE.Mesh(tailGeo, scarfMat);
+        t.position.set(x, 0.78, 0.38);
+        t.rotation.z = rz;
+        t.castShadow = true;
+        rig.add(t);
+      }
+      for (const m of [scarf, knot]) m.castShadow = true;
+      rig.add(scarf, knot);
     } else {
-      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 4), flat('#7fa38a'));
-      leaf.scale.z = 0.3;
-      leaf.position.set(0.12, 0.55, 0);
-      leaf.rotation.z = -0.5;
+      const sh = new THREE.Shape();
+      sh.moveTo(0, 0);
+      sh.bezierCurveTo(0.09, 0.12, 0.08, 0.34, 0, 0.56);
+      sh.bezierCurveTo(-0.08, 0.34, -0.09, 0.12, 0, 0);
+      const lg = new THREE.ShapeGeometry(sh, 8);
+      const lp = lg.attributes.position;
+      for (let i = 0; i < lp.count; i++) lp.setZ(i, lp.getY(i) * lp.getY(i) * 0.35 + Math.abs(lp.getX(i)) * 0.6);
+      lg.computeVertexNormals();
+      const leaf = new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ color: '#7fa38a', roughness: 0.45, side: THREE.DoubleSide }));
+      leaf.position.set(0.28, 0.4, 0.04);
+      leaf.rotation.set(0.2, 0.3, -0.85);
+      leaf.castShadow = true;
       head.add(leaf);
     }
     rig.add(head);
 
+    const dark = new THREE.MeshStandardMaterial({ color: '#2c2b31', roughness: 0.7 });
+    const claw = new THREE.MeshStandardMaterial({ color: '#e9dfcb', roughness: 0.5 });
     const limb = (x, y, z, len) => {
       const g = new THREE.Group();
       g.position.set(x, y, z);
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, len, 6), flat(color, {}));
-      m.position.y = -len / 2;
-      m.castShadow = true;
-      const paw = blob(0.12, 0, dark);
-      paw.position.y = -len;
-      g.add(m, paw);
+      const geo = new THREE.CapsuleGeometry(0.135, len - 0.2, 8, 16);
+      geo.translate(0, -len / 2 + 0.07, 0);
+      fur(geo, base, { parent: g, length: 0.04, density: 0.26 });
+      const paw = new THREE.Mesh(ellipsoid(0.125, 1, 0.85, 1.1, 14), dark);
+      paw.position.y = -len + 0.02;
+      paw.castShadow = true;
+      for (let i = -1; i <= 1; i++) {
+        const c = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.075, 6), claw);
+        c.position.set(i * 0.05, -0.04, 0.115);
+        c.rotation.x = Math.PI * 0.62;
+        paw.add(c);
+      }
+      g.add(paw);
       g.paw = paw;
       rig.add(g);
       return g;
     };
-    this.arms = [limb(-0.44, 1.0, 0.18, 0.55), limb(0.44, 1.0, 0.18, 0.55)];
-    this.legs = [limb(-0.3, 0.36, 0.12, 0.42), limb(0.3, 0.36, 0.12, 0.42)];
+    this.arms = [limb(-0.44, 1.0, 0.18, 0.62), limb(0.44, 1.0, 0.18, 0.62)];
+    this.legs = [limb(-0.3, 0.36, 0.12, 0.46), limb(0.3, 0.36, 0.12, 0.46)];
 
     // A gum leaf in the right paw while eating.
-    this.snack = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 4), flat('#6b917c'));
-    this.snack.scale.z = 0.3;
-    this.snack.position.y = -0.12;
+    const sg = new THREE.ShapeGeometry((() => {
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.bezierCurveTo(0.08, 0.12, 0.07, 0.3, 0, 0.5);
+      s.bezierCurveTo(-0.07, 0.3, -0.08, 0.12, 0, 0);
+      return s;
+    })(), 6);
+    this.snack = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: '#6b917c', roughness: 0.5, side: THREE.DoubleSide }));
+    this.snack.position.set(0, -0.04, 0.08);
+    this.snack.rotation.set(1.2, 0, 0);
     this.arms[1].paw.add(this.snack);
     this.snack.visible = false;
 
-    // The gumnut that circles the head while a real model call is in flight.
-    this.nut = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#f2c14e', emissiveIntensity: 2.2, flatShading: true }));
-    this.nutLight = new THREE.PointLight('#f2c14e', 0, 4, 2);
-    this.nut.add(this.nutLight);
+    // The gumnut that circles the head while a real model call is in flight. It glows (and
+    // blooms) by itself; no point light, so it costs nothing in every other material.
+    this.nut = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), new THREE.MeshStandardMaterial({ color: '#ffe9a8', emissive: '#f2b441', emissiveIntensity: 3.2, roughness: 0.4 }));
     this.nut.visible = false;
     root.add(this.nut);
 
@@ -123,15 +218,25 @@ export class Koala {
     this.#labels();
   }
 
+  // Draw n of the fur shells (0 turns the fur off and leaves the solid body).
+  setShells(n) {
+    for (const m of this.furMeshes) {
+      m.visible = n > 0;
+      m.count = Math.max(1, n);
+    }
+    for (const mat of this.furMats) mat.userData.fur.uShells.value = Math.max(1, n);
+  }
+
   #labels() {
     const tag = document.createElement('button');
     tag.className = 'koala-tag';
     tag.type = 'button';
     tag.style.setProperty('--c', this.color);
-    tag.innerHTML = `<i></i><span class="n"></span><span class="s"></span>`;
+    tag.innerHTML = '<i></i><span class="n"></span><svg class="ico" aria-hidden="true"><use href="#i-sit"/></svg><span class="s"></span>';
     tag.querySelector('.n').textContent = this.name;
     this.tagEl = tag;
     this.tagState = tag.querySelector('.s');
+    this.tagIcon = tag.querySelector('.ico use');
     const tagObj = new CSS2DObject(tag);
     tagObj.position.y = 2.3;
     this.root.add(tagObj);
@@ -175,10 +280,9 @@ export class Koala {
     this.pos.set(x, y, z);
     this.goal = { x, y, z };
     this.path = [];
-    this.root.position.copy(this.pos);
+    this.root.position.set(x, y + this.groundY(x, z), z);
   }
 
-  // Walk the waypoints, then reach goal (climbing to goal.y if it is up a tree).
   setGoal(goal, anim, path = [], face = null) {
     const moved = Math.hypot(goal.x - this.goal.x, goal.z - this.goal.z) > 0.05 || Math.abs(goal.y - this.goal.y) > 0.05;
     this.goal = goal;
@@ -201,7 +305,7 @@ export class Koala {
     this.moving = false;
 
     if (p.y > 0.02 && Math.hypot(this.goal.x - p.x, this.goal.z - p.z) > 0.25) {
-      p.y = Math.max(0, p.y - CLIMB * dt); // climb down before walking off
+      p.y = Math.max(0, p.y - CLIMB * dt);
       mode = 'climbing';
     } else if (far > 0.06) {
       const step = Math.min(far, WALK * dt);
@@ -216,10 +320,10 @@ export class Koala {
       mode = 'climbing';
     }
     if (!this.moving && this.face != null) this.heading += angleTo(this.heading, this.face) * Math.min(1, dt * 4);
-    this.root.position.copy(p);
+    this.root.position.set(p.x, p.y + this.groundY(p.x, p.z), p.z);
     this.root.rotation.y = this.heading;
     this.#pose(mode, dt, t);
-    this.#bubbles(dt, t);
+    this.#bubbles(dt);
   }
 
   #pose(mode, dt, t) {
@@ -227,7 +331,7 @@ export class Koala {
     const s = t + this.seed;
     const k = 10;
     let pitch = 0, y = 0, z = 0, headX = 0, headY = 0, breathe = 1 + Math.sin(s * 2) * 0.02;
-    let aL = -0.3, aR = -0.3, aZ = 0, lL = -1.35, lR = -1.35, eyes = 1;
+    let aL = -0.3, aR = -0.3, aZ = 0, lL = -1.35, lR = -1.35, eyes = 1, earFlop = 0;
     this.snack.visible = false;
 
     switch (mode) {
@@ -236,6 +340,9 @@ export class Koala {
         pitch = 1.05; y = -0.2; z = 0.15; headX = -0.95;
         aL = 0.3 + w * 0.7; aR = 0.3 - w * 0.7; lL = -0.2 - w * 0.6; lR = -0.2 + w * 0.6;
         y += Math.abs(w) * 0.05;
+        earFlop = Math.abs(w) * 0.12;
+        this.stepped = Math.sign(w) !== Math.sign(this.lastW) && this.lastW !== 0;
+        this.lastW = w;
         break;
       }
       case 'climbing': {
@@ -259,6 +366,7 @@ export class Koala {
         const ph = Math.sin(t * 2.2 + (this.id === 'mallee' ? 0 : 1.4));
         z = ph * 0.55; y = 0.55 + (1 - Math.cos(ph)) * 0.25; pitch = -ph * 0.25;
         aL = aR = -2.9; lL = lR = -1.3 - ph * 0.5;
+        earFlop = Math.abs(ph) * 0.3;
         break;
       }
       case 'splash': {
@@ -269,11 +377,12 @@ export class Koala {
       case 'ball':
         aL = aR = -1.3 + Math.sin(s * 4) * 0.6; pitch = 0.15 + Math.sin(s * 4) * 0.08; headX = -0.15;
         break;
-      default: // idle: breathe, look around, twitch an ear
+      default:
         headY = Math.sin(s * 0.45) * 0.45 + Math.sin(s * 1.3) * 0.08;
         headX = Math.sin(s * 0.3) * 0.08;
         break;
     }
+    if (mode !== 'walk') this.stepped = false;
 
     this.blink -= dt;
     if (this.blink < 0) this.blink = 2.5 + Math.random() * 3.5;
@@ -285,7 +394,7 @@ export class Koala {
     rig.position.z = damp(rig.position.z, z, k, dt);
     head.rotation.x = damp(head.rotation.x, headX, k, dt);
     head.rotation.y = damp(head.rotation.y, headY, k, dt);
-    this.torso.scale.y = 1.12 * breathe;
+    this.torso.scale.y = breathe;
     arms[0].rotation.x = damp(arms[0].rotation.x, aL, k, dt);
     arms[1].rotation.x = damp(arms[1].rotation.x, aR, k, dt);
     arms[0].rotation.z = damp(arms[0].rotation.z, -aZ, k, dt);
@@ -293,14 +402,13 @@ export class Koala {
     legs[0].rotation.x = damp(legs[0].rotation.x, lL, k, dt);
     legs[1].rotation.x = damp(legs[1].rotation.x, lR, k, dt);
     const twitch = Math.sin(s * 0.7) > 0.97 ? Math.sin(s * 40) * 0.25 : 0;
-    this.ears[0].rotation.z = twitch;
-    this.ears[1].rotation.z = -twitch * 0.5;
+    this.ears[0].rotation.z = damp(this.ears[0].rotation.z, twitch + earFlop, 14, dt);
+    this.ears[1].rotation.z = damp(this.ears[1].rotation.z, -twitch * 0.5 - earFlop, 14, dt);
 
     this.nut.visible = this.thinking;
     if (this.thinking) {
       this.nut.position.set(Math.cos(t * 3) * 0.75, 2.0 + Math.sin(t * 5) * 0.08, Math.sin(t * 3) * 0.75);
       this.nut.rotation.y += dt * 4;
-      this.nutLight.intensity = 3;
     }
     this.zEl.classList.toggle('show', mode === 'sleep');
   }

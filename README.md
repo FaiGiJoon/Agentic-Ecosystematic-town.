@@ -155,6 +155,15 @@ give it a leaf, blossom, pebble, ball or feather, say something (up to 140 chara
 it. That costs nothing by itself; the koala reacts on its next decision. Press V to switch
 between walking and just watching (click a koala to follow it).
 
+Press **B** (or the Overview / Horizon button) to fly between the horizon view, with the sky, sun,
+moon and stars, and a high overview where every landmark and both koalas are easy to see.
+
+**Graphics.** The gear in the top bar opens the graphics settings: Auto, Low, Medium or High, and
+a frame-rate readout. Auto starts from a tier that suits the device (phones start one lower), and
+lowers the resolution and then the effects if frames get slow, and brings them back after a long
+calm stretch. The sky, forest, fur and water are described in
+[docs/grove-graphics.md](docs/grove-graphics.md), with the measurements and the known limits.
+
 The side panel has **Koalas** (mood, hunger, energy, bond, opinion, memories), **Talk** (every
 thought, line and action) and **Meter**.
 
