@@ -98,6 +98,39 @@ three.js 0.160.0 loads from cdn.jsdelivr.net, so the district needs internet; th
 Content-Security-Policy allows only that host and a hash of its import map. Goldenrod City is
 unchanged and still loads nothing from outside except its font.
 
+## The paper desk: can the traders make money?
+
+The top of the district's **Exchange** tab is a live paper desk. The server fetches real BTC,
+ETH and SOL prices from Kraken's public ticker once a minute (read-only market data: no account,
+no key) and five trader agents trade them with $1,000 of paper money each:
+
+| Trader | Strategy |
+| --- | --- |
+| Moonshot | random big bets |
+| Ledger Lou | momentum: buys when the 10-minute average crosses above the 30-minute one, sells on the way down |
+| Mean Mabel | mean reversion: buys 1% under the 30-minute average, sells half 1% over |
+| Diamond Hans | buys $100 every 30 minutes, never sells |
+| Spready | small trades on every 0.3% wiggle |
+| Buy & Hold | the benchmark: splits $1,000 over the three coins once, then does nothing |
+
+Fills are realistic: buys at the real ask, sells at the real bid, and every fill pays the
+exchange fee (0.4%, Kraken's lowest tier). The board shows each trader's return and whether it
+is beating or behind Buy & Hold. If a trader can't beat doing nothing after fees over weeks,
+it would not make money with real money either.
+
+The same guards that a real-money version would need already sit in front of every order:
+
+- a cap per trade (`DESK_MAX_TRADE_USD`) and per trader per day (`DESK_MAX_DAY_USD`),
+- a total loss limit (`DESK_MAX_LOSS_PCT`) that stops all trading when the traders together
+  are down that far, and stops it again on resume while they still are,
+- **Stop all trading**, a kill switch in the Exchange tab that also cancels pending orders,
+- with `DESK_APPROVAL=on`, every order waits for you to approve it (and expires after 5 minutes);
+  guards run again, against the price at that moment, when you approve.
+
+State lives in `data/desk.sqlite` (git-ignored) and survives restarts. Claude's tickets have no
+access to the desk, and there is deliberately no real-money broker: `#fill` in `hq/desk.js` is
+the one place one would plug in, behind the same guards.
+
 ## Settings
 
 All settings are environment variables.
@@ -109,6 +142,14 @@ All settings are environment variables.
 | `CLAUDE_BIN` | `claude` | The Claude Code executable. |
 | `TICKET_TIMEOUT_MS` | `600000` | A ticket that runs longer than this (10 minutes) is stopped and fails. |
 | `MAX_BUDGET_USD` | `1` | Spending cap per ticket, passed to `--max-budget-usd`. |
+| `DESK` | on | `off` turns the paper desk off, including its price requests to Kraken. |
+| `DESK_POLL_MS` | `60000` | How often prices are fetched and the traders decide. |
+| `DESK_FEE` | `0.004` | Fee per fill (0.4%). |
+| `DESK_START_USD` | `1000` | Paper dollars each trader starts with. |
+| `DESK_MAX_TRADE_USD` | `250` | Largest single order; bigger ones are capped. |
+| `DESK_MAX_DAY_USD` | `2000` | Most a trader may trade per day. |
+| `DESK_MAX_LOSS_PCT` | `25` | All trading stops when the traders together are down this far. |
+| `DESK_APPROVAL` | off | `on` makes every order wait for your approval. |
 
 Note on the budget: the run does not load your plugins, so a small ticket costs well under
 the default `MAX_BUDGET_USD` of 1 (the sandbox probe runs cost about $0.08 to $0.09 each).

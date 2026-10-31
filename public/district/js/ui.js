@@ -192,6 +192,19 @@ export function createUI(world, scene, hq) {
 
   // --- Exchange ----------------------------------------------------------------
   $('tab-exchange').innerHTML = `
+    <section class="desk">
+      <div class="desk-head"><h3>Live paper desk</h3><span class="pill" id="d-status"></span></div>
+      <div class="disclaimer">Real BTC, ETH and SOL prices from Kraken, paper dollars. Buys fill at the real ask, sells at the real bid, and every fill pays the exchange fee. No account, no real money.</div>
+      <div class="coins" id="d-prices"></div>
+      <canvas class="chart" id="d-chart" aria-label="Each trader's return since the start"></canvas>
+      <div class="legend" id="d-legend"></div>
+      <div class="rows" id="d-board"></div>
+      <div id="d-pending"></div>
+      <div class="trade"><button class="btn sell" id="d-halt" type="button">Stop all trading</button></div>
+      <div class="legend" id="d-guards"></div>
+      <h3>Desk orders</h3><div class="tape" id="d-tape"></div>
+    </section>
+    <h3>Town coins · simulated</h3>
     <div class="disclaimer">🎮 Play money only. Coins, prices and agents are simulated. Nothing here touches a real wallet or chain.</div>
     <div class="coins" id="x-coins"></div>
     <canvas class="chart" id="x-chart"></canvas>
@@ -252,7 +265,140 @@ export function createUI(world, scene, hq) {
     renderExchange();
   });
 
+  // --- live paper desk -------------------------------------------------------------
+  const DESK_COLOR = { 'buy-and-hold': '#e9eef5', moonshot: '#f07fb0', 'ledger-lou': '#7fd1e8', 'mean-mabel': '#c48af0', 'diamond-hans': '#f2c14e', spready: '#4fd18b' };
+  const usd = (n) => '$' + fmt.num(n, 2);
+
+  $('d-halt').addEventListener('click', async () => {
+    const halted = !!hq.desk?.halted;
+    try {
+      await (halted ? hq.deskResume() : hq.deskHalt());
+      toast(halted ? 'Trading resumed' : 'All trading stopped');
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $('d-pending').addEventListener('pointerdown', async (e) => {
+    const b = e.target.closest('button[data-order]');
+    if (!b) return;
+    try {
+      const o = await hq.deskOrder(Number(b.dataset.order), b.dataset.ok === '1');
+      toast(o.status === 'filled' ? `Filled at ${usd(o.price)}` : o.status === 'rejected' ? `Blocked: ${o.reason}` : 'Order rejected');
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  // Every trader's return since the start, on one percent scale; the benchmark dashed.
+  function drawDeskChart(canvas, d) {
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const ids = Object.keys(d.curve.series).filter((id) => d.curve.series[id].length > 1);
+    if (!ids.length || !w) {
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '11px JetBrains Mono';
+      ctx.fillText('The chart fills in after a few minutes of trading.', 10, h / 2);
+      return;
+    }
+    const start = Object.fromEntries(d.traders.map((t) => [t.id, t.start]));
+    const rets = Object.fromEntries(ids.map((id) => [id, d.curve.series[id].map((v) => (v / start[id] - 1) * 100)]));
+    const all = Object.values(rets).flat();
+    const lo = Math.min(0, ...all);
+    const hi = Math.max(0, ...all);
+    const pad = 10;
+    const n = Math.max(...ids.map((id) => rets[id].length));
+    const X = (i) => pad + (i / Math.max(1, n - 1)) * (w - pad * 2);
+    const Y = (v) => h - pad - ((v - lo) / (hi - lo || 1)) * (h - pad * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(pad, Y(0));
+    ctx.lineTo(w - pad, Y(0));
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px JetBrains Mono';
+    ctx.fillText(`${hi.toFixed(2)}%`, pad + 2, pad + 8);
+    ctx.fillText(`${lo.toFixed(2)}%`, pad + 2, h - pad - 2);
+    for (const id of ids) {
+      ctx.setLineDash(id === 'buy-and-hold' ? [5, 4] : []);
+      ctx.strokeStyle = DESK_COLOR[id] ?? '#888';
+      ctx.lineWidth = id === 'buy-and-hold' ? 1.5 : 2;
+      ctx.beginPath();
+      rets[id].forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  function renderDesk() {
+    const d = hq.desk;
+    if (!d) {
+      $('d-status').textContent = hq.online ? 'off' : 'offline';
+      $('d-status').style.setProperty('--c', '#5c6b85');
+      $('d-prices').innerHTML = '<div class="disclaimer">The paper desk runs inside the Agent HQ server. Start it with <code>node server.js</code> (and leave DESK unset) to trade live prices.</div>';
+      return;
+    }
+    const status = d.halted ? 'stopped' : d.feedError ? 'no prices' : d.config.approval ? 'paper · approvals' : 'paper · running';
+    $('d-status').textContent = status;
+    $('d-status').style.setProperty('--c', d.halted ? '#ff6b6b' : d.feedError ? '#f2a541' : '#4fd18b');
+    $('d-halt').textContent = d.halted ? 'Resume trading' : 'Stop all trading';
+    $('d-halt').className = `btn ${d.halted ? 'buy' : 'sell'}`;
+    const age = d.pricesAt ? Math.round((Date.now() - d.pricesAt) / 1000) : null;
+    $('d-prices').innerHTML = d.prices
+      ? Object.entries(d.prices)
+          .map(([sym, q]) => `<div class="coin-tab"><div class="s">${sym}</div><div class="p">${usd(q.last)}</div><div class="state">bid ${fmt.num(q.bid, 2)} · ask ${fmt.num(q.ask, 2)}</div></div>`)
+          .join('')
+      : `<div class="disclaimer">${esc(d.feedError ?? 'Waiting for the first prices…')}</div>`;
+    drawDeskChart($('d-chart'), d);
+    $('d-legend').innerHTML = d.traders.map((t) => `<span style="--c:${DESK_COLOR[t.id]}">${esc(t.name)}</span>`).join('') + (age != null ? `<span style="--c:transparent">prices ${age}s old</span>` : '');
+    const bench = d.traders.find((t) => t.benchmark);
+    const ranked = [...d.traders].sort((a, b) => b.ret - a.ret);
+    $('d-board').innerHTML = ranked
+      .map((t) => {
+        const vs = t.ret - bench.ret;
+        const verdict = t.benchmark ? 'the benchmark' : `${vs >= 0 ? 'beating' : 'behind'} Buy & Hold by ${fmt.pct(Math.abs(vs)).replace('+', '')}`;
+        return `<div class="row desk-row" style="--c:${DESK_COLOR[t.id]}">
+          <div class="name"><span class="dot" style="background:${DESK_COLOR[t.id]}"></span>${esc(t.name)} <span class="state">${t.strategy}</span></div>
+          <div class="meta">${usd(t.equity)} <span class="${t.ret >= 0 ? 'up' : 'down'}">${fmt.pct(t.ret)}</span></div>
+          <div class="state">${verdict}</div>
+          <div class="meta">${t.trades} trades · ${usd(t.fees)} fees</div>
+        </div>`;
+      })
+      .join('');
+    const name = (id) => d.traders.find((t) => t.id === id)?.name ?? id;
+    $('d-pending').innerHTML = d.pending.length
+      ? `<h3>Waiting for your approval</h3>` +
+        d.pending
+          .map((o) => `<div class="fund"><div><b>${esc(name(o.trader))}</b> wants to ${o.side} ${o.side === 'buy' ? usd(o.usd) + ' of' : fmt.num(o.qty, 6)} ${o.sym}<div class="state">${esc(o.why ?? '')}</div></div>
+            <div class="actions"><button class="btn small buy" data-order="${o.id}" data-ok="1">Approve</button><button class="btn small ghost" data-order="${o.id}" data-ok="0">Reject</button></div></div>`)
+          .join('')
+      : '';
+    const g = d.config;
+    $('d-guards').innerHTML = [
+      `max ${usd(g.maxTradeUsd)} per trade`,
+      `max ${usd(g.maxDayUsd)} per trader per day`,
+      `stops at -${g.maxLossPct}% together`,
+      `fee ${(g.fee * 100).toFixed(2)}%`,
+      g.approval ? 'every order needs your approval' : 'approvals off (DESK_APPROVAL=on to turn on)',
+      d.halted ? `stopped: ${esc(d.halted.reason)}` : '',
+    ]
+      .filter(Boolean)
+      .map((x) => `<span style="--c:transparent">${x}</span>`)
+      .join('');
+    $('d-tape').innerHTML =
+      d.recent
+        .slice(0, 14)
+        .map((o) => {
+          const when = new Date(o.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          if (o.status !== 'filled') return `<div>${when} <span class="down">${o.status.toUpperCase()}</span> ${esc(name(o.trader))} ${o.side} ${o.sym}: ${esc(o.reason ?? '')}</div>`;
+          return `<div>${when} <span class="${o.side === 'buy' ? 'up' : 'down'}">${o.side.toUpperCase()}</span> ${esc(name(o.trader))} ${usd(o.usd)} ${o.sym} @ ${fmt.num(o.price, 2)} · ${esc(o.why ?? '')}</div>`;
+        })
+        .join('') || '<div>No orders yet.</div>';
+  }
+  hq.onDesk = () => ui.tab === 'exchange' && renderDesk();
+
   function renderExchange() {
+    renderDesk();
     $('x-coins').innerHTML = Object.values(market.coins)
       .map((c) => {
         const ch = market.change(c.sym);

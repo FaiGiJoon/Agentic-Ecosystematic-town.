@@ -21,11 +21,15 @@ export const api = {
   create: ({ title, body }) => post('/api/tickets', { title, body }),
   assign: (id) => post(`/api/tickets/${id}/assign`),
   retry: (id) => post(`/api/tickets/${id}/retry`),
+  desk: () => request('/api/desk'),
+  deskHalt: () => post('/api/desk/halt'),
+  deskResume: () => post('/api/desk/resume'),
+  deskOrder: (id, approve) => post(`/api/desk/orders/${id}/${approve ? 'approve' : 'reject'}`),
 };
 
 // EventSource reconnects by itself; every (re)connect reloads the full state.
 // A dropped stream or a failed state load calls onOffline until the next good load.
-export function connect({ onState, onTicket, onEvent, onAgent, onOffline }) {
+export function connect({ onState, onTicket, onEvent, onAgent, onDesk, onOffline }) {
   const es = new EventSource('/api/events');
   es.addEventListener('error', () => onOffline?.());
   const on = (name, fn) => es.addEventListener(name, (e) => {
@@ -42,5 +46,6 @@ export function connect({ onState, onTicket, onEvent, onAgent, onOffline }) {
   on('ticket', onTicket);
   on('event', onEvent);
   on('agent', onAgent);
+  on('desk', onDesk);
   return es;
 }

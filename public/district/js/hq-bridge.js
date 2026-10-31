@@ -61,7 +61,9 @@ export function connectHQ(world, scene) {
     phase: 'idle',
     outcome: null,
     notes: 0,
+    desk: null,
     onChange: null,
+    onDesk: null,
   };
 
   scene.addAgent(claude);
@@ -106,6 +108,7 @@ export function connectHQ(world, scene) {
       scene.setBooks?.(hq.notes);
       if (s.agent) advance(s.agent);
       hq.onChange?.();
+      api.desk().then((d) => { hq.desk = d; hq.onDesk?.(); }, () => { hq.desk = null; });
     },
     onTicket: upsert,
     onEvent(e) {
@@ -118,6 +121,10 @@ export function connectHQ(world, scene) {
         scene.showBubble(claude, `${bubble(a.step)} ${a.step.detail || ''}`.trim(), 'think');
       }
       advance(a);
+    },
+    onDesk(state) {
+      hq.desk = state;
+      hq.onDesk?.();
     },
     onOffline() {
       hq.online = false;
@@ -157,6 +164,9 @@ export function connectHQ(world, scene) {
   hq.create = (title, body) => api.create({ title, body });
   hq.assign = (id) => api.assign(id);
   hq.retry = (id) => api.retry(id);
+  hq.deskHalt = () => api.deskHalt();
+  hq.deskResume = () => api.deskResume();
+  hq.deskOrder = (id, approve) => api.deskOrder(id, approve);
   hq.usage = () => usageTotals(hq.tickets);
   return hq;
 }

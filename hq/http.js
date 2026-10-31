@@ -66,7 +66,7 @@ function readJson(req) {
   });
 }
 
-export function createApp({ store, runner, config, publicDir }) {
+export function createApp({ store, runner, desk = null, config, publicDir }) {
   const root = path.resolve(publicDir);
   const clients = new Set();
 
@@ -76,6 +76,7 @@ export function createApp({ store, runner, config, publicDir }) {
   }
   store.onChange((msg) => broadcast(msg.type, msg.type === 'ticket' ? msg.ticket : msg.event));
   runner.onAgent((agent) => broadcast('agent', agent));
+  desk?.onChange((state) => broadcast('desk', state));
 
   function sse(req, res) {
     res.writeHead(200, {
@@ -106,6 +107,7 @@ export function createApp({ store, runner, config, publicDir }) {
       const { title, body } = await readJson(req);
       return sendJson(res, 201, store.create({ title, body }));
     }
+    if (pathname === '/api/desk' || pathname.startsWith('/api/desk/')) return deskApi(req, res, pathname);
     const m = /^\/api\/tickets\/(\d+)(?:\/(assign|retry))?$/.exec(pathname);
     if (m) {
       const id = Number(m[1]);
@@ -119,6 +121,25 @@ export function createApp({ store, runner, config, publicDir }) {
         const ticket = action === 'assign' ? store.assign(id) : store.retry(id);
         runner.kick();
         return sendJson(res, 200, ticket);
+      }
+    }
+    throw new HttpError(404, 'not found');
+  }
+
+  // The paper desk: state, kill switch, and approving or rejecting pending orders.
+  function deskApi(req, res, pathname) {
+    if (!desk) throw new HttpError(404, 'the paper desk is off (DESK=off)');
+    const method = req.method;
+    if (pathname === '/api/desk' && method === 'GET') return sendJson(res, 200, desk.state());
+    if (pathname === '/api/desk/halt' && method === 'POST') return sendJson(res, 200, desk.halt('kill switch'));
+    if (pathname === '/api/desk/resume' && method === 'POST') return sendJson(res, 200, desk.resume());
+    const m = /^\/api\/desk\/orders\/(\d+)\/(approve|reject)$/.exec(pathname);
+    if (m && method === 'POST') {
+      try {
+        return sendJson(res, 200, desk.decideOrder(Number(m[1]), m[2] === 'approve'));
+      } catch (err) {
+        if (err.status) throw new HttpError(err.status, err.message);
+        throw err;
       }
     }
     throw new HttpError(404, 'not found');

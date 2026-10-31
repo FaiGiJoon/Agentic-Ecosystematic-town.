@@ -4,11 +4,13 @@ import config from './hq/config.js';
 import { Store } from './hq/store.js';
 import { Runner } from './hq/runner.js';
 import { createApp } from './hq/http.js';
+import { Desk } from './hq/desk.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 const store = new Store(path.join(config.dataDir, 'hq.sqlite'));
 const runner = new Runner({ store, config });
-const server = createApp({ store, runner, config, publicDir: path.join(config.root, 'public') });
+const desk = config.desk ? new Desk({ path: path.join(config.dataDir, 'desk.sqlite'), config: config.desk }) : null;
+const server = createApp({ store, runner, desk, config, publicDir: path.join(config.root, 'public') });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -24,4 +26,5 @@ server.listen(config.port, '127.0.0.1', () => {
   // Only the instance that owns the port may requeue tickets left "working".
   store.resetWorking();
   runner.kick();
+  desk?.start();
 });

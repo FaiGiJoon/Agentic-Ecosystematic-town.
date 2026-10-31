@@ -193,3 +193,13 @@ h3:first-child { margin-top: 0; }
 .ticket .trade { margin-top: 6px; }
 .disclaimer code { font: 11px var(--mono); color: var(--cyan); }
 .chip b.down { color: var(--red); }
+
+/* ---------- live paper desk ---------- */
+.desk { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.desk-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.desk-head h3 { margin: 0; }
+.desk .coin-tab { cursor: default; }
+.desk .disclaimer { margin: 8px 0; }
+.desk-row { cursor: default; border-left: 3px solid var(--c); }
+.desk-row .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.desk .rows { margin-top: 8px; }
