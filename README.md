@@ -68,6 +68,36 @@ failure, which ticket to RETRY). If the live connection to the server drops, the
 `AGENT HQ  OFFLINE` until it comes back.
 Only one ticket runs at a time; assigned tickets wait in a queue.
 
+## The 3D district
+
+Click **3D DISTRICT** in the top right (or open http://127.0.0.1:4317/district/) for a 3D view
+of the same HQ, with a whole simulated town around it.
+
+What is real, from the HQ server:
+
+- **Claude** (orange, with a spinning star) follows the same phases as in Goldenrod: from its
+  home at the **Vault Library** to the **Ticket Board** to pick up a ticket, to its desk at the
+  **Agent Hub** while it works (bubbles show READ, WEB, SEARCH, WRITE), and back to the board
+  with `!` or `?`.
+- The **Tickets** tab files, assigns and retries real tickets, and shows each one's output,
+  usage and the name of the note it was saved as in your Obsidian `00-inbox/`.
+- The **Agent Hub** tab starts with real Claude Code spend: tokens, USD and run time over all
+  finished tickets.
+- The **Vault Library** shelf gets a book for every ticket whose answer was saved to the vault.
+
+What is simulated, and labelled so (nothing in it calls a model or spends money):
+
+- 13 town agents: builders who build voxel buildings block by block, traders, a Mayor who files
+  town tickets, an auditor, the Hub keeper and a gossip. They talk to each other, and their
+  token counts are estimates that never mix with Claude's real usage.
+- The **Exchange**: three made-up coins and play-money credits. You can trade or back a trader
+  agent's fund. No wallet, exchange or chain is involved.
+- The town's gossip does pick up real news ("Claude finished #3 ...").
+
+three.js 0.160.0 loads from cdn.jsdelivr.net, so the district needs internet; the page's own
+Content-Security-Policy allows only that host and a hash of its import map. Goldenrod City is
+unchanged and still loads nothing from outside except its font.
+
 ## Settings
 
 All settings are environment variables.
