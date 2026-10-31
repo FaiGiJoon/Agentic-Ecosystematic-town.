@@ -53,6 +53,13 @@ export default {
     maxLossPct: positiveNumber('DESK_MAX_LOSS_PCT', env.DESK_MAX_LOSS_PCT, 25, { max: 100 }),
     approval: env.DESK_APPROVAL === 'on',
   },
+  // Koala Grove: two koalas on real model calls; GROVE_DAY_USD caps today's real spend.
+  grove: env.GROVE === 'off' ? null : {
+    model: env.GROVE_MODEL || 'claude-haiku-5-5',
+    bin: env.GROVE_BIN || env.CLAUDE_BIN || 'claude',
+    callUsd: positiveNumber('GROVE_CALL_USD', env.GROVE_CALL_USD, 0.05, { max: 1 }),
+    dayUsd: positiveNumber('GROVE_DAY_USD', env.GROVE_DAY_USD, 0.5),
+  },
   root,
   dataDir: path.join(root, 'data'),
   workDir: path.join(root, 'work'),

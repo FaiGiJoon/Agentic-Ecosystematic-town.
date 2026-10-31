@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'sha256-UK9O+rbB3KhDsGQrE55qyNAJCpV7WHc47zV2U5f4bE4='; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com">
+  <meta name="referrer" content="no-referrer">
+  <title>Koala Grove</title>
+  <meta name="theme-color" content="#151a26">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../district/district.css">
+  <link rel="stylesheet" href="grove.css">
+  <!-- three.js is pinned; the CSP hash below must change if this map changes. -->
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="boot">Connecting to Agent HQ…</div>
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">❦</span>
+      <div>
+        <div class="title">Koala Grove</div>
+        <div class="sub" id="clock">Day 1 · 08:00</div>
+      </div>
+    </div>
+    <a class="back" href="../">◀ Goldenrod</a>
+    <a class="back" href="../district/">District</a>
+    <div class="chips" id="chips"></div>
+    <button id="mode" class="back" type="button">Walking</button>
+    <button id="play" class="playbtn" type="button">▶ Play</button>
+  </header>
+
+  <aside id="panel">
+    <nav class="tabs" id="tabs">
+      <button data-tab="koalas" class="on" type="button">Koalas</button>
+      <button data-tab="talk" type="button">Talk</button>
+      <button data-tab="meter" type="button">Meter</button>
+    </nav>
+    <p id="status-line" class="status-line"></p>
+    <section class="tab-body" id="tab-koalas"></section>
+    <section class="tab-body" id="tab-talk" hidden></section>
+    <section class="tab-body" id="tab-meter" hidden></section>
+    <button id="panel-toggle" type="button" title="Toggle panel">⟩</button>
+  </aside>
+
+  <div id="inspector" hidden></div>
+  <div id="feed" aria-live="polite"></div>
+  <div id="hint"></div>
+  <div id="toast" role="status"></div>
+
+  <div id="intro" hidden>
+    <div class="intro-card">
+      <h1>Koala Grove</h1>
+      <p class="lede">Mallee and Bramble are asleep in their grove. Both are real AI agents: every move they make and every word they say is a model decision, paid for in real tokens.</p>
+      <p class="fine" id="intro-cap"></p>
+      <div class="intro-actions">
+        <button class="btn wake" id="intro-play" type="button">Wake the koalas</button>
+        <button class="btn ghost" id="intro-look" type="button">Look around first</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

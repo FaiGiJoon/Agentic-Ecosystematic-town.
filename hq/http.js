@@ -66,7 +66,7 @@ function readJson(req) {
   });
 }
 
-export function createApp({ store, runner, desk = null, config, publicDir }) {
+export function createApp({ store, runner, desk = null, grove = null, config, publicDir }) {
   const root = path.resolve(publicDir);
   const clients = new Set();
 
@@ -77,6 +77,7 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
   store.onChange((msg) => broadcast(msg.type, msg.type === 'ticket' ? msg.ticket : msg.event));
   runner.onAgent((agent) => broadcast('agent', agent));
   desk?.onChange((state) => broadcast('desk', state));
+  grove?.onChange((state) => broadcast('grove', state));
 
   function sse(req, res) {
     res.writeHead(200, {
@@ -108,6 +109,7 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
       return sendJson(res, 201, store.create({ title, body }));
     }
     if (pathname === '/api/desk' || pathname.startsWith('/api/desk/')) return deskApi(req, res, pathname);
+    if (pathname === '/api/grove' || pathname.startsWith('/api/grove/')) return groveApi(req, res, pathname);
     const m = /^\/api\/tickets\/(\d+)(?:\/(assign|retry))?$/.exec(pathname);
     if (m) {
       const id = Number(m[1]);
@@ -140,6 +142,28 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
       } catch (err) {
         if (err.status) throw new HttpError(err.status, err.message);
         throw err;
+      }
+    }
+    throw new HttpError(404, 'not found');
+  }
+
+  // Koala Grove: state, Play/Pause, the page's heartbeat, and the visitor's actions.
+  async function groveApi(req, res, pathname) {
+    if (!grove) throw new HttpError(404, 'Koala Grove is off (GROVE=off)');
+    const method = req.method;
+    if (pathname === '/api/grove' && method === 'GET') return sendJson(res, 200, grove.state());
+    if (method === 'POST') {
+      if (pathname === '/api/grove/play') return sendJson(res, 200, grove.play());
+      if (pathname === '/api/grove/pause') return sendJson(res, 200, grove.pause());
+      if (pathname === '/api/grove/heartbeat') return sendJson(res, 200, grove.heartbeat());
+      if (pathname === '/api/grove/act') {
+        const body = await readJson(req);
+        try {
+          return sendJson(res, 200, grove.act(body));
+        } catch (err) {
+          if (err.status) throw new HttpError(err.status, err.message);
+          throw err;
+        }
       }
     }
     throw new HttpError(404, 'not found');

@@ -5,12 +5,17 @@ import { Store } from './hq/store.js';
 import { Runner } from './hq/runner.js';
 import { createApp } from './hq/http.js';
 import { Desk } from './hq/desk.js';
+import { Grove } from './hq/grove.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 const store = new Store(path.join(config.dataDir, 'hq.sqlite'));
 const runner = new Runner({ store, config });
 const desk = config.desk ? new Desk({ path: path.join(config.dataDir, 'desk.sqlite'), config: config.desk }) : null;
-const server = createApp({ store, runner, desk, config, publicDir: path.join(config.root, 'public') });
+const grove = config.grove ? new Grove({
+  path: path.join(config.dataDir, 'grove.sqlite'),
+  config: { ...config.grove, workDir: path.join(config.workDir, 'grove') },
+}) : null;
+const server = createApp({ store, runner, desk, grove, config, publicDir: path.join(config.root, 'public') });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -27,4 +32,5 @@ server.listen(config.port, '127.0.0.1', () => {
   store.resetWorking();
   runner.kick();
   desk?.start();
+  grove?.start();
 });

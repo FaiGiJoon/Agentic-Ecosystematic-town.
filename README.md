@@ -131,6 +131,62 @@ State lives in `data/desk.sqlite` (git-ignored) and survives restarts. Claude's 
 access to the desk, and there is deliberately no real-money broker: `#fill` in `hq/desk.js` is
 the one place one would plug in, behind the same guards.
 
+## Koala Grove: two koalas that are real AI agents
+
+Click **KOALA GROVE** in the top right of Goldenrod (or **Koala Grove** in the district's top
+bar, or open http://127.0.0.1:4317/grove/). It is a small 3D game and an experiment: two koalas,
+Mallee and Bramble, live on a floating eucalyptus island, and every move they make and every word
+they say is a real model decision. Watch how two LLM agents get on when left to themselves.
+
+- **Mallee** is young, bold and curious, collects shiny pebbles and wants to look brave.
+  **Bramble** is older, gentle and sleepy, loves eucalyptus and naps, and is slow to trust.
+- They eat at three gum trees, climb, nap in the mossy hollow, play on the rope swing, with the
+  ball or in the pond, visit the lookout rock, talk, give each other things, and remember.
+- Each decision is JSON: a private thought, an action and target, what they say out loud, a mood,
+  something to remember, and how the moment changed their feelings about the other koala.
+- Memory lives in `data/grove.sqlite` (git-ignored) and survives restarts: the last 10 things
+  each koala noticed, up to 12 long-term memories it chose to keep, a bond score from -100 to 100,
+  and a one-line opinion of its friend. All of it goes into the next prompt.
+- Days run on a 20-minute clock with dawn, dusk, stars, fireflies and glowing mushrooms.
+
+**You** are the little visitor with the lantern. Walk with WASD or the arrow keys (Shift runs), or
+click the grass; drag to look around. Click a koala, or press E next to one, to open its card:
+give it a leaf, blossom, pebble, ball or feather, say something (up to 140 characters), or pat
+it. That costs nothing by itself; the koala reacts on its next decision. Press V to switch
+between walking and just watching (click a koala to follow it).
+
+The side panel has **Koalas** (mood, hunger, energy, bond, opinion, memories), **Talk** (every
+thought, line and action) and **Meter**.
+
+### What it costs, and how it is kept in check
+
+Playing uses real tokens on your Claude Code login, so the **Meter** tab and the top bar show
+real tokens and USD per koala, today and all time, from the CLI's own `result` usage (the same
+numbers as a ticket's usage line, kept apart from the district's simulated estimates). Measured
+on 2026-10-31 with `claude-haiku-5-5`: about 2,600 to 3,300 tokens in and $0.0007 per decision,
+so roughly $0.10 to $0.15 an hour with both koalas awake.
+
+- The grove starts **paused**. Nothing is called until you press **Play** (or "Wake the koalas").
+- Even when playing, the koalas only think while a grove page is open and visible: the page
+  checks in every 15 seconds, and 45 seconds without a check-in stops the calls. Close the tab
+  and they rest.
+- Each koala decides every 20 to 60 seconds, sooner (6 to 12 seconds) when spoken to or given
+  something, never twice within 12 seconds, and never with two calls in flight.
+- **Pause** stops new calls at once. Three failed calls in a row pause the grove by themselves.
+- `GROVE_DAY_USD` (default $0.50) caps today's real spend; once reached, the koalas rest until
+  midnight. A call already running when the cap is hit still finishes, so the total can go over
+  by at most one call per koala.
+- `GROVE_CALL_USD` is passed to `--max-budget-usd` for every call.
+
+Each decision is one `claude -p` call, isolated like the ticket runner but with **no tools at
+all**: `--tools ""`, `--setting-sources ""`, `--strict-mcp-config`, `--disable-slash-commands`,
+`--permission-mode dontAsk` and `--no-session-persistence`, with `--system-prompt` set to the
+koala's persona (which also leaves out Claude Code's own long system prompt), `--model
+claude-haiku-5-5`, and `--json-schema` for the reply. The server checks every reply again before
+acting on it: unknown actions become sitting, impossible targets are corrected, text is capped.
+What you type to a koala goes into its prompt, but a koala has nothing it could do with it
+except talk back.
+
 ## Settings
 
 All settings are environment variables.
@@ -150,6 +206,11 @@ All settings are environment variables.
 | `DESK_MAX_DAY_USD` | `2000` | Most a trader may trade per day. |
 | `DESK_MAX_LOSS_PCT` | `25` | All trading stops when the traders together are down this far. |
 | `DESK_APPROVAL` | off | `on` makes every order wait for your approval. |
+| `GROVE` | on | `off` turns Koala Grove off. |
+| `GROVE_MODEL` | `claude-haiku-5-5` | Model for the koalas' decisions. |
+| `GROVE_DAY_USD` | `0.5` | Real spend per day after which the koalas stop thinking until midnight. |
+| `GROVE_CALL_USD` | `0.05` | Spending cap per decision, passed to `--max-budget-usd` (at most 1). |
+| `GROVE_BIN` | `CLAUDE_BIN` | The executable the koalas call, if it should differ from the tickets'. |
 
 Note on the budget: the run does not load your plugins, so a small ticket costs well under
 the default `MAX_BUDGET_USD` of 1 (the sandbox probe runs cost about $0.08 to $0.09 each).
@@ -203,6 +264,15 @@ stand at its desk). Use a temporary vault so your real one is untouched:
 mkdir -p /tmp/demo-vault/00-inbox
 CLAUDE_BIN=$PWD/test/fixtures/fake-claude.mjs FAKE_MODE=ok FAKE_DELAY_MS=8000 \
   VAULT=/tmp/demo-vault node server.js
+```
+
+For the grove, `test/fixtures/fake-koala.mjs` plays a koala: it answers with plausible random
+decisions (`FAKE_MODE` `ok`, `text`, `garbage`, `error`, `budget` or `hang`), so you can watch the
+game with the meter counting made-up usage. Its usage then lands in `data/grove.sqlite`; delete
+that file afterwards so the meter shows only real spend again.
+
+```
+GROVE_BIN=$PWD/test/fixtures/fake-koala.mjs FAKE_DELAY_MS=1500 node server.js
 ```
 
 ## Tests
