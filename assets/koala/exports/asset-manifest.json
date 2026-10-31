@@ -1,0 +1,90 @@
+{
+  "asset": "CR_Koala",
+  "generated": "2026-10-31T23:26:38",
+  "blender": "4.5.15 LTS",
+  "source": "assets/koala/CR_Koala_master.blend",
+  "target_engine": "three.js",
+  "units": {
+    "system": "METRIC",
+    "scale_length": 1.0,
+    "authoring_up": "Z",
+    "authoring_forward": "-Y",
+    "export_up": "Y",
+    "export_forward": "+Z",
+    "note": "glTF converts Z up to Y up; a subject facing -Y in Blender faces +Z in glTF"
+  },
+  "target_height_m": 1.85,
+  "bounds_m": {
+    "min": [
+      -0.8169,
+      -0.7688,
+      -0.186
+    ],
+    "max": [
+      0.8169,
+      0.5793,
+      1.94
+    ],
+    "size": [
+      1.6339,
+      1.348,
+      2.126
+    ]
+  },
+  "files": {
+    "all": "exports/CR_Koala.glb"
+  },
+  "lods": [
+    {
+      "level": 0,
+      "objects": [
+        "CR_Koala_Head",
+        "CR_Koala_Muzzle",
+        "CR_Koala_Cheek.L",
+        "CR_Koala_Cheek.R",
+        "CR_Koala_Nose",
+        "CR_Koala_EarOuter.L",
+        "CR_Koala_EarInner.L",
+        "CR_Koala_EarOuter.R",
+        "CR_Koala_EarInner.R",
+        "CR_Koala_Torso",
+        "CR_Koala_Belly",
+        "CR_Koala_ArmFur.L",
+        "CR_Koala_PawArm.L",
+        "CR_Koala_LegFur.L",
+        "CR_Koala_PawLeg.L",
+        "CR_Koala_ArmFur.R",
+        "CR_Koala_PawArm.R",
+        "CR_Koala_LegFur.R",
+        "CR_Koala_PawLeg.R"
+      ],
+      "tris": 11024
+    }
+  ],
+  "materials": [
+    "CR_Koala_Fur",
+    "CR_Koala_FurCream",
+    "CR_Koala_Nose",
+    "CR_Koala_Paw"
+  ],
+  "textures": [],
+  "texture_contract": {
+    "basecolor": "sRGB",
+    "normal": "Non-Color, tangent space, OpenGL +Y",
+    "roughness": "Non-Color",
+    "metallic": "Non-Color",
+    "ao": "Non-Color",
+    "packed_channels": "none by default; document any ORM packing here"
+  },
+  "skeleton": [],
+  "sockets": [],
+  "colliders": [],
+  "animation_contract": "animation-contract.json",
+  "inferred_from_no_reference": [
+    "back",
+    "underside",
+    "ear cups",
+    "haunches"
+  ],
+  "dependencies": []
+}

@@ -38,23 +38,23 @@ export function createUI({ scene, api }) {
       playBtn.disabled = false;
     }
   });
+  // two cameras, both at ground level: first person (your own eyes, no body) and third person
   const modeBtn = $('#mode');
   const setMode = (m) => {
-    scene.setMode(m);
-    modeBtn.innerHTML = m === 'walk' ? `${ICON('i-walk')}Walking` : `${ICON('i-eye')}Watching`;
-    modeBtn.title = m === 'walk' ? 'Switch to watching (V)' : 'Switch to walking (V)';
-    $('#hint').textContent = m === 'walk'
-      ? 'WASD or click the grass to walk, drag to look, E or click a koala to visit, V to watch'
-      : 'Drag to orbit, scroll to zoom, click a koala to follow it, V to walk';
+    scene.setCamera(m);
+    modeBtn.innerHTML = m === 'first' ? `${ICON('i-eye')}First person` : `${ICON('i-walk')}Third person`;
+    modeBtn.title = m === 'first' ? 'Switch to third person (V)' : 'Switch to first person (V)';
+    $('#hint').textContent = m === 'first'
+      ? 'Drag to look · WASD or tap the grass to walk · E or tap a koala · V for third person'
+      : 'WASD or tap the grass to walk · drag to look around · E or tap a koala · V for first person';
   };
-  modeBtn.addEventListener('click', () => setMode(scene.mode === 'walk' ? 'watch' : 'walk'));
-  setMode('walk');
+  modeBtn.addEventListener('click', () => setMode(scene.cam === 'first' ? 'third' : 'first'));
+  setMode('third');
 
   addEventListener('keydown', (e) => {
     if (e.target.closest?.('input, textarea, button')) return;
     const k = e.key.toLowerCase();
-    if (k === 'v') setMode(scene.mode === 'walk' ? 'watch' : 'walk');
-    if (k === 'b') toggleView();
+    if (k === 'v') setMode(scene.cam === 'first' ? 'third' : 'first');
     if (k === 'escape') {
       select(null);
       pop.hidden = true;
@@ -70,19 +70,6 @@ export function createUI({ scene, api }) {
       else toast('Walk closer to a koala first.');
     }
   });
-
-  // --- camera view: the horizon (sky, sun, moon) or a high overview (landmarks, koalas) ---
-  const viewBtn = $('#view');
-  const markView = () => {
-    viewBtn.innerHTML = scene.view === 'horizon' ? `${ICON('i-mountain')}Overview` : `${ICON('i-sun')}Horizon`;
-    viewBtn.title = scene.view === 'horizon' ? 'Fly up to see the whole grove (B)' : 'Back to the horizon: sky, sun and moon (B)';
-  };
-  const toggleView = () => {
-    scene.setView(scene.view === 'horizon' ? 'overview' : 'horizon');
-    markView();
-  };
-  viewBtn.addEventListener('click', toggleView);
-  markView();
 
   // --- graphics settings ---------------------------------------------------------------
   const pop = $('#settings-pop');

@@ -2,6 +2,10 @@ import { connectGrove, groveApi, keepAlive } from './net.js';
 import { GroveScene } from './scene.js';
 import { createUI } from './ui.js';
 import { freshLog } from './view.js';
+import { loadKoalaParts } from './koala-parts.js';
+
+// The koalas are modelled in Blender; if the file is missing they fall back to built-in shapes.
+await loadKoalaParts(new URL('../assets/CR_Koala.glb', import.meta.url).href);
 
 let scene = null;
 let ui = null;

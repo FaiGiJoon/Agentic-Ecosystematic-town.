@@ -416,7 +416,7 @@ export function fernMesh({ spots, tex, terrain, seed = 33 }) {
 export function bushShape(seed) {
   const r = rng(seed);
   const cl = Array.from({ length: 5 }, () => ({ pos: V((r() - 0.5) * 1.1, 0.35 + r() * 0.35, (r() - 0.5) * 1.1), size: 0.55 + r() * 0.25 }));
-  return canopy(cl, { cards: 8, seed: seed + 1, cardSize: 0.75 });
+  return canopy(cl, { cards: 18, seed: seed + 1, cardSize: 0.95 });
 }
 
 // --- flowers -------------------------------------------------------------------------------------

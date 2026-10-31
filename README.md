@@ -150,19 +150,28 @@ they say is a real model decision. Watch how two LLM agents get on when left to 
 - Days run on a 20-minute clock with dawn, dusk, stars, fireflies and glowing mushrooms.
 
 **You** are the little visitor with the lantern. Walk with WASD or the arrow keys (Shift runs), or
-click the grass; drag to look around. Click a koala, or press E next to one, to open its card:
-give it a leaf, blossom, pebble, ball or feather, say something (up to 140 characters), or pat
-it. That costs nothing by itself; the koala reacts on its next decision. Press V to switch
-between walking and just watching (click a koala to follow it).
+click the grass. Click a koala, or press E next to one, to open its card: give it a leaf, blossom,
+pebble, ball or feather, say something (up to 140 characters), or pat it. That costs nothing by
+itself; the koala reacts on its next decision.
 
-Press **B** (or the Overview / Horizon button) to fly between the horizon view, with the sky, sun,
-moon and stars, and a high overview where every landmark and both koalas are easy to see.
+Two cameras, switched with **V** or the button in the top bar. **First person** is a straight view
+through the visitor's eyes with no body in front of it (only the lantern's glow); drag to look.
+**Third person** follows the visitor from behind and a little above, with the visitor in view; drag
+to orbit, scroll to zoom, and it swings back behind you while you walk. There is no bird's-eye
+view: the camera never looks down on the island from above.
 
 **Graphics.** The gear in the top bar opens the graphics settings: Auto, Low, Medium or High, and
 a frame-rate readout. Auto starts from a tier that suits the device (phones start one lower), and
 lowers the resolution and then the effects if frames get slow, and brings them back after a long
 calm stretch. The sky, forest, fur and water are described in
 [docs/grove-graphics.md](docs/grove-graphics.md), with the measurements and the known limits.
+
+**The koala model** is made in Blender, not in code. `assets/koala/` holds the brief, the build
+script (`build/03_forms.py`, 19 named parts, about 11,000 triangles) and the export manifest; the
+game loads `public/grove/assets/CR_Koala.glb` through `public/grove/js/koala-parts.js` and drops
+each part into the rig joint it is named for. If the file is missing the koalas fall back to the
+old built-in ellipsoids. The `.blend`, the review renders and the reference screenshot are not in
+git; rebuild them with the steps in `assets/koala/README.md`.
 
 The side panel has **Koalas** (mood, hunger, energy, bond, opinion, memories), **Talk** (every
 thought, line and action) and **Meter**.

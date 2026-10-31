@@ -1,10 +1,12 @@
-// A koala: smooth ellipsoid body parts, each wrapped in shell fur (instanced shells cut by a
-// strand texture), with a muzzle and glossy nose, eyes with catch-lights, big fluffy ears,
-// claws and a prop each. Posed and walked in code: the scene says where to be and what to do.
+// A koala: smooth body parts, each wrapped in shell fur (instanced shells cut by a strand
+// texture), with a muzzle and glossy nose, eyes with catch-lights, big fluffy ears, claws and a
+// prop each. The parts are modelled in Blender (koala-parts.js); if that file did not load they
+// are plain ellipsoids. Posed and walked in code: the scene says where to be and what to do.
 
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { furMaterial } from './gfx/materials.js';
+import { koalaPart } from './koala-parts.js';
 
 const TAU = Math.PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -58,6 +60,9 @@ export class Koala {
     const base = new THREE.Color(color).lerp(new THREE.Color('#b9a68e'), 0.3);
     const cream = new THREE.Color(CREAM);
 
+    // The Blender part of that name (origin on the joint it turns about), or the ellipsoid it replaces.
+    const part = (name, fallback) => koalaPart(name) ?? fallback();
+
     // A solid, shadow-casting body part with fur shells over it.
     const fur = (geo, tint, { length = 0.045, density = 1.3, parent = rig, tip = null } = {}) => {
       const grp = new THREE.Group();
@@ -81,32 +86,33 @@ export class Koala {
       return grp;
     };
 
-    this.torso = fur(ellipsoid(0.6, 1, 1.12, 0.92), base, { length: 0.05, density: 0.85 });
+    this.torso = fur(part('Torso', () => ellipsoid(0.6, 1, 1.12, 0.92)), base, { length: 0.05, density: 0.85 });
     this.torso.position.y = 0.68;
-    const belly = fur(ellipsoid(0.44, 0.92, 1.05, 0.5), cream, { length: 0.05, density: 0.75 });
+    const belly = fur(part('Belly', () => ellipsoid(0.44, 0.92, 1.05, 0.5)), cream, { length: 0.05, density: 0.75 });
     belly.position.set(0, 0.62, 0.3);
 
     const head = (this.head = new THREE.Group());
     head.position.set(0, 1.36, 0.08);
-    fur(ellipsoid(0.5, 1.18, 0.96, 0.96, 32), base, { parent: head, length: 0.048, density: 0.8 });
-    const muzzle = fur(ellipsoid(0.2, 1.25, 0.9, 0.9), cream, { parent: head, length: 0.03, density: 0.6 });
+    fur(part('Head', () => ellipsoid(0.5, 1.18, 0.96, 0.96, 32)), base, { parent: head, length: 0.048, density: 0.8 });
+    const muzzle = fur(part('Muzzle', () => ellipsoid(0.2, 1.25, 0.9, 0.9)), cream, { parent: head, length: 0.03, density: 0.6 });
     muzzle.position.set(0, -0.1, 0.4);
     for (const s of [-1, 1]) {
-      const cheek = fur(ellipsoid(0.15, 1, 0.9, 0.8), cream, { parent: head, length: 0.07, density: 0.55 });
+      const cheek = fur(part(s > 0 ? 'CheekL' : 'CheekR', () => ellipsoid(0.15, 1, 0.9, 0.8)), cream, { parent: head, length: 0.07, density: 0.55 });
       cheek.position.set(s * 0.42, -0.1, 0.24);
-      cheek.rotation.z = s * 0.4;
+      if (!koalaPart('Head')) cheek.rotation.z = s * 0.4;
     }
     this.ears = [-1, 1].map((s) => {
       const ear = new THREE.Group();
       ear.position.set(s * 0.52, 0.28, -0.02);
-      fur(ellipsoid(0.3, 1, 1, 0.42, 22), base, { parent: ear, length: 0.04, density: 0.5 });
-      const inner = fur(ellipsoid(0.2, 1, 1, 0.3, 20), cream, { parent: ear, length: 0.085, density: 0.4 });
-      inner.position.z = 0.075;
+      const side = s > 0 ? 'L' : 'R';
+      fur(part('EarOuter' + side, () => ellipsoid(0.3, 1, 1, 0.42, 22)), base, { parent: ear, length: 0.04, density: 0.5 });
+      const inner = fur(part('EarInner' + side, () => ellipsoid(0.2, 1, 1, 0.3, 20)), cream, { parent: ear, length: 0.085, density: 0.4 });
+      if (!koalaPart('EarInner' + side)) inner.position.z = 0.075;   // the Blender part already carries its offset
       head.add(ear);
       return ear;
     });
     const noseMat = new THREE.MeshPhysicalMaterial({ color: '#17171b', roughness: 0.24, clearcoat: 0.7, clearcoatRoughness: 0.2 });
-    const nose = new THREE.Mesh(ellipsoid(0.17, 0.82, 1.28, 0.75, 20), noseMat);
+    const nose = new THREE.Mesh(part('Nose', () => ellipsoid(0.17, 0.82, 1.28, 0.75, 20)), noseMat);
     nose.position.set(0, 0.0, 0.56);
     nose.castShadow = true;
     head.add(nose);
@@ -171,13 +177,17 @@ export class Koala {
 
     const dark = new THREE.MeshStandardMaterial({ color: '#2c2b31', roughness: 0.7 });
     const claw = new THREE.MeshStandardMaterial({ color: '#e9dfcb', roughness: 0.5 });
-    const limb = (x, y, z, len) => {
+    const limb = (x, y, z, len, kind) => {
       const g = new THREE.Group();
       g.position.set(x, y, z);
-      const geo = new THREE.CapsuleGeometry(0.135, len - 0.2, 8, 16);
-      geo.translate(0, -len / 2 + 0.07, 0);
+      const side = x > 0 ? 'L' : 'R';
+      const geo = part(kind + 'Fur' + side, () => {
+        const capsule = new THREE.CapsuleGeometry(0.135, len - 0.2, 8, 16);
+        capsule.translate(0, -len / 2 + 0.07, 0);
+        return capsule;
+      });
       fur(geo, base, { parent: g, length: 0.04, density: 0.26 });
-      const paw = new THREE.Mesh(ellipsoid(0.125, 1, 0.85, 1.1, 14), dark);
+      const paw = new THREE.Mesh(part('Paw' + kind + side, () => ellipsoid(0.125, 1, 0.85, 1.1, 14)), dark);
       paw.position.y = -len + 0.02;
       paw.castShadow = true;
       for (let i = -1; i <= 1; i++) {
@@ -191,8 +201,8 @@ export class Koala {
       rig.add(g);
       return g;
     };
-    this.arms = [limb(-0.44, 1.0, 0.18, 0.62), limb(0.44, 1.0, 0.18, 0.62)];
-    this.legs = [limb(-0.3, 0.36, 0.12, 0.46), limb(0.3, 0.36, 0.12, 0.46)];
+    this.arms = [limb(-0.44, 1.0, 0.18, 0.62, 'Arm'), limb(0.44, 1.0, 0.18, 0.62, 'Arm')];
+    this.legs = [limb(-0.3, 0.36, 0.12, 0.46, 'Leg'), limb(0.3, 0.36, 0.12, 0.46, 'Leg')];
 
     // A gum leaf in the right paw while eating.
     const sg = new THREE.ShapeGeometry((() => {

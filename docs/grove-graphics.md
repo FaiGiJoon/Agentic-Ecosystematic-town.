@@ -78,10 +78,10 @@ downloaded assets (every texture is generated at load).
 | Terrain | A heightfield lawn with a carved pond basin, a baked splat map (paths, occlusion, water depth), layered cliffs with a rock normal map, hanging roots, floating islets in the distance. |
 | Vegetation | 18,000 instanced grass blades that sway and part around the koalas; real eucalypts (lofted trunk with root flare, bark and normal maps, curved branches, drooping leaf cards) as 3 named trees plus a forest of up to 38 instanced trees and trees on the islets; ferns, bushes, flowers, sculpted rocks. |
 | Water | A custom shader on the standard material: fresnel reflection of the baked sky, two flowing normal layers, shore foam and tint from baked depth, ripple rings from play, caustics on the bed. |
-| Koalas | Smooth ellipsoids with shell fur (one draw call per part through `gl_InstanceID`), muzzle, glossy nose, eyes with catch-lights, fluffy ears, cheek tufts, claws, a woven scarf and a gum leaf, foot-step dust, ear flop. |
+| Koalas | 19 parts modelled in Blender (about 11,000 triangles: muzzle bulge, full cheeks, cupped ears, haunches, toe pads) with shell fur (one draw call per part through `gl_InstanceID`), glossy nose, eyes with catch-lights, claws, a woven scarf and a gum leaf, foot-step dust, ear flop. |
 | Effects | Pooled billboard particles (dust, crumbs, droplets, sparkles, hearts, drifting leaves, gumnut glow) and a GPU ambient layer (fireflies by night, pollen by day), butterflies, ring and hover highlights. |
 | Post | HDR render target with MSAA, bloom, a grade pass (sharpen, contrast, saturation, vignette, time-of-day tint), then tone mapping. |
-| UI | Design tokens and a type scale, an inline SVG icon sprite instead of emoji, 44 px touch targets, a bottom sheet on phones, a graphics popover (Auto / Low / Medium / High, frame-rate readout), a camera-view button (horizon / overview, key `B`), a sun/moon clock icon, labels that fade with distance. |
+| UI | Design tokens and a type scale, an inline SVG icon sprite instead of emoji, 44 px touch targets, a bottom sheet on phones, a graphics popover (Auto / Low / Medium / High, frame-rate readout), a first-person / third-person camera button (key `V`), a sun/moon clock icon, labels that fade with distance. |
 | Performance | Three tiers; an adaptive governor steps resolution down first, then effects, and back up after a long calm stretch; geometry is built once at full capacity and drawn with a smaller `count`. |
 
 ## 4. Measured result
@@ -109,7 +109,33 @@ medium tier on the same CPU: 432 ms.
 - The pond reflects the baked sky, not the trees around it (no planar reflection).
 - Texture size is chosen when the page loads (256 / 384 / 512 by the starting tier); changing the
   tier later changes everything except texture sharpness.
-- At the overview height the koalas are small; click one to follow it.
+- The cameras are first person (no body, drag to look) and third person (visitor in view, orbit
+  within a band of about 4 to 27 degrees above the horizon). There is no overhead camera on
+  purpose: it hid every landmark and made the koalas specks.
+- The koala's back, underside, ear cups and haunches were modelled without reference (the only
+  reference was a render of the old in-game koala); the manifest lists them as inferred.
 - Nothing here has been run on a real iPhone. The phone build was exercised at iPhone size in a
   desktop browser with a stand-in for Claude.
 - The trees are one species shape in three variants; the leaves are drawn cards, not geometry.
+
+## 6. The Blender koala
+
+The koala is the one model in the game that is not built in code. It was made with the
+`blender-image-to-3d` skill (https://github.com/majidmanzarpour/blender-game-skills) and Blender 4.5, in
+gated phases, each one checked against rendered images:
+
+1. **Brief** (`assets/koala/asset-brief.md`): the parts, the scale, the triangle budget and what is inferred.
+2. **Master scene** (`init_master.py`): metres, Z up, the koala facing -Y, the game's chase camera recreated.
+3. **Forms** (`assets/koala/build/03_forms.py`): every size comes from the rig constants in `koala.js`,
+   written in the game's own coordinates and converted once. Each part's origin sits on the joint
+   the game rotates it about, so the existing pose code drives the new meshes unchanged.
+4. **Validate** (`validate.py`): 11,024 triangles against a 12,000 budget, UVs present, no doubled vertices.
+5. **Export** (`export_delivery.py`): one GLB plus a manifest. **Round trip** (`roundtrip.py`): the GLB re-imported
+   with the same 19 parts and the same height.
+
+Notes from doing it: the koala shows no baked colour because the game draws fur as shell layers, so the
+mesh carries smooth normals and a continuous UV (wrapped around the lateral axis so the pinch points sit
+under the ears and arms, never on the crown) and nothing else. The first render showed one stacked blob:
+`set_origin()` reads `matrix_world`, which Blender does not refresh in background mode, so the script now
+offsets the mesh itself. The round-trip check flags the paws as 0.186 m below the ground plane; that is the
+game's rig space (the paw pivots hang below the body group), not an error.

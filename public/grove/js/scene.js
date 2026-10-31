@@ -24,9 +24,10 @@ import { rng } from './gfx/noise.js';
 const DAY_MS = 20 * 60000;
 const TAU = Math.PI * 2;
 const HIGH = SETTINGS.high;
-// Two camera presets: the horizon (sky, sun, moon, stars) and a high overview (every landmark and
-// both koalas readable). pitch is the angle above the ground plane, dist the distance to the target.
-const VIEWS = { horizon: { pitch: 0.26, dist: 22.5 }, overview: { pitch: 0.62, dist: 21 } };
+// Two cameras, both at ground level: first person (the visitor's own eyes, no body in view) and
+// third person (behind the visitor, never higher than a low chase angle: no bird's-eye view).
+const EYE = 1.55;
+const CHASE = { dist: 7.5, pitch: 0.2 };
 const lerp = (a, b, t) => a + (b - a) * t;
 const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
 const smooth = (a, b, x) => {
@@ -62,11 +63,10 @@ export class GroveScene {
     this.places = places;
     this.koalas = new Map();
     this.state = null;
-    this.mode = 'walk';
     this.selected = null;
     this.hover = null;
-    this.view = 'horizon';
-    this.viewAnim = 0;
+    this.cam = 'third';
+    this.look = { yaw: Math.PI, pitch: 0.02 };
     this.onPick = () => {};
     this.clockFrac = 0.35;
     this.clockDay = 1;
@@ -114,14 +114,16 @@ export class GroveScene {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0xbfd0e0, 0.0068);
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1600);
-    this.camera.position.set(10.5, 7.4, 31);
+    this.camera.position.set(4, 3.1, 17.5);
     this.controls = new OrbitControls(this.camera, r.domElement);
     this.controls.enableDamping = true;
+    // third person looks across the lawn from behind the visitor, never down from above
     this.controls.maxPolarAngle = 1.5;
-    this.controls.minPolarAngle = 0.25;
-    this.controls.minDistance = 4.5;
-    this.controls.maxDistance = 90;
-    this.controls.target.set(4, 1.6, 10);
+    this.controls.minPolarAngle = 1.1;
+    this.controls.minDistance = 3.5;
+    this.controls.maxDistance = 11;
+    this.controls.enablePan = false;
+    this.controls.target.set(4, 1.5, 10);
 
     this.#lights();
     this.sky = new Sky({ scene: this.scene, renderer: r, settings: S });
@@ -135,13 +137,23 @@ export class GroveScene {
 
     this.raycaster = new THREE.Raycaster();
     let down = null;
-    r.domElement.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+    let drag = null;
+    r.domElement.addEventListener('pointerdown', (e) => {
+      down = { x: e.clientX, y: e.clientY };
+      drag = { x: e.clientX, y: e.clientY };
+    });
     r.domElement.addEventListener('pointerup', (e) => {
       if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) this.pick(e);
-      down = null;
+      down = drag = null;
     });
     let lastMove = 0;
     r.domElement.addEventListener('pointermove', (e) => {
+      if (drag && this.cam === 'first' && (e.buttons || e.pointerType === 'touch')) {
+        this.#lookDrag(e.clientX - drag.x, e.clientY - drag.y);
+        drag.x = e.clientX;
+        drag.y = e.clientY;
+        return;
+      }
       if (e.pointerType === 'touch' || e.buttons || performance.now() - lastMove < 70) return;
       lastMove = performance.now();
       this.#hover(e);
@@ -433,7 +445,8 @@ export class GroveScene {
       instances: bushes.map((b) => ({ x: b.x, y: T.height(b.x, b.z) - 0.05, z: b.z, yaw: rand() * TAU, scale: b.k, bark: BARK[0], leaf: LEAF[Math.floor(rand() * LEAF.length)] })),
       castLeaves: false,
     });
-    bushMeshes.children[0].visible = false;
+    bushMeshes.children[0].visible = false; // no bark
+    bushMeshes.children[2].visible = false; // no inner mass: the cards alone make a shrub
     group.add(bushMeshes);
     group.add(...flowerMeshes({ spots: patch, terrain: T, palette: ['#f08aa0', '#e8584f', '#f6e7c8', '#f2c14e', '#f3b0c8', '#b9a2f0'] }));
     group.add(...flowerMeshes({ spots: wild, terrain: T, seed: 9, size: 0.55, palette: ['#ffffff', '#fff3b0', '#f6e7c8', '#e9d8ff'] }));
@@ -480,7 +493,7 @@ export class GroveScene {
     this.lanternLight = new THREE.PointLight('#ffcf80', 0, 10, 1.7);
     lantern.add(glass, capTop, handle, this.lanternLight);
     g.add(body, head, brim, crown, band, pack, lantern);
-    this.visitor = { root: g, heading: Math.PI, target: null, body, lantern, walk: 0 };
+    this.visitor = { root: g, heading: Math.PI, target: null, body, lantern, walk: 0, moving: false };
     g.position.set(4, this.groundY(4, 10), 10);
     g.traverse((o) => {
       if (o.isMesh) o.castShadow = true;
@@ -573,31 +586,42 @@ export class GroveScene {
       this.framed = true;
       const aspect = w / h;
       if (aspect < 1) {
-        // portrait: the high overview, stood further back (the sky is a thin strip here anyway)
-        this.setView('overview', true);
         const off = this.camera.position.clone().sub(this.controls.target);
-        off.multiplyScalar(Math.min(1.9, Math.pow(1 / aspect, 0.7)));
+        off.multiplyScalar(Math.min(1.45, Math.pow(1 / aspect, 0.35)));
         this.camera.position.copy(this.controls.target).add(off);
       }
     }
     this.pxScale = (h * dpr) / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
   }
 
-  // Fly the camera to a preset (keeping the direction it is looking from), or jump with `now`.
-  setView(name, now = false) {
-    this.view = name;
-    this.viewGoal = VIEWS[name];
-    this.viewAnim = now ? 0 : 1.6;
-    if (now) this.#applyView(1);
+  // 'first': the visitor's eyes, body hidden (the lantern stays). 'third': a chase camera behind them.
+  setCamera(name) {
+    this.cam = name;
+    const first = name === 'first';
+    this.controls.enabled = !first;
+    this.camera.fov = first ? 72 : 60;
+    this.camera.updateProjectionMatrix();
+    this.resize();
+    const v = this.visitor;
+    v.root.traverse((o) => {
+      if (o.isMesh && !v.lantern.getObjectById(o.id)) o.visible = !first;
+    });
+    if (first) {
+      this.look.yaw = v.heading + Math.PI;
+      this.look.pitch = 0.02;
+    } else {
+      // swing the chase camera round to behind wherever the visitor is facing
+      const p = v.root.position;
+      const target = V(p.x, p.y + 1.5, p.z);
+      this.controls.target.copy(target);
+      this.camera.position.copy(target).add(V(-Math.sin(v.heading) * Math.cos(CHASE.pitch) * CHASE.dist, Math.sin(CHASE.pitch) * CHASE.dist, -Math.cos(v.heading) * Math.cos(CHASE.pitch) * CHASE.dist));
+    }
   }
 
-  #applyView(k) {
-    const off = this.camera.position.clone().sub(this.controls.target);
-    const yaw = Math.atan2(off.x, off.z);
-    const cur = { pitch: Math.atan2(off.y, Math.hypot(off.x, off.z)), dist: off.length() };
-    const pitch = lerp(cur.pitch, this.viewGoal.pitch, k);
-    const dist = lerp(cur.dist, this.viewGoal.dist, k);
-    this.camera.position.copy(this.controls.target).add(V(Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist));
+  // Dragging looks around in first person (it grabs the world: drag right and the view turns left).
+  #lookDrag(dx, dy) {
+    this.look.yaw += dx * 0.0045;
+    this.look.pitch = Math.max(-1.2, Math.min(1.2, this.look.pitch + dy * 0.0045));
   }
 
   ripple(x, z) {
@@ -672,10 +696,6 @@ export class GroveScene {
     for (const [kid, v] of this.koalas) v.tagEl.classList.toggle('selected', kid === id);
   }
 
-  setMode(mode) {
-    this.mode = mode;
-  }
-
   // Walk the visitor up to a koala (used when giving, saying or patting).
   visit(id) {
     const v = this.koalas.get(id);
@@ -710,7 +730,6 @@ export class GroveScene {
   pick(e) {
     const id = this.#koalaAt(e);
     if (id) return this.onPick(id);
-    if (this.mode !== 'walk') return this.onPick(null);
     this.raycaster.setFromCamera(this.#ndc(e), this.camera);
     const g = this.raycaster.intersectObject(this.ground, false)[0];
     if (g) this.visitor.target = { x: g.point.x, z: g.point.z };
@@ -732,7 +751,7 @@ export class GroveScene {
     this.#toys(dt, t);
     this.#life(dt, t);
     this.#camera(dt);
-    this.controls.update();
+    if (!this.freeCam && this.cam === 'third') this.controls.update();
     this.post.render(dt);
     this.labels.render(this.scene, this.camera);
   }
@@ -797,7 +816,7 @@ export class GroveScene {
     const p = v.root.position;
     let mx = 0;
     let mz = 0;
-    if (this.mode === 'walk') {
+    {
       const k = this.keys;
       const f = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
       const s = (k.has('d') || k.has('arrowright') ? 1 : 0) - (k.has('a') || k.has('arrowleft') ? 1 : 0);
@@ -853,6 +872,7 @@ export class GroveScene {
     for (const id of Object.keys(this.trees ?? {})) pushOut(this.places[id].x, this.places[id].z, 0.95);
     const moved = Math.hypot(p.x - before.x, p.z - before.z);
     v.walk += moved * 3;
+    v.moving = moved > 0.0005;
     p.y = this.groundY(p.x, p.z);
     v.body.position.y = 0.72 + (moved > 0 ? Math.abs(Math.sin(v.walk)) * 0.07 : 0);
     v.lantern.rotation.z = Math.sin(v.walk) * 0.2;
@@ -987,21 +1007,32 @@ export class GroveScene {
   }
 
   #camera(dt) {
-    const c = this.controls;
-    let want;
-    if (this.mode === 'walk') {
-      const p = this.visitor.root.position;
-      want = V(p.x, p.y + 1.6, p.z);
+    if (this.freeCam) return; // dev capture helper: the camera is set by hand
+    const v = this.visitor;
+    const p = v.root.position;
+    if (this.cam === 'first') {
+      const bob = v.moving ? Math.sin(v.walk * 2) * 0.03 : 0;
+      this.camera.position.set(p.x, p.y + EYE + bob, p.z);
+      this.camera.rotation.set(this.look.pitch, this.look.yaw, 0, 'YXZ');
+      v.heading = this.look.yaw - Math.PI; // the body faces where the eyes look
     } else {
-      const v = this.selected && this.koalas.get(this.selected);
-      want = v ? V(v.pos.x, v.pos.y + this.groundY(v.pos.x, v.pos.z) + 1, v.pos.z) : V(0, 2.2, 2);
-    }
-    const step = want.sub(c.target).multiplyScalar(1 - Math.exp(-4 * dt));
-    c.target.add(step);
-    this.camera.position.add(step);
-    if (this.viewAnim > 0) {
-      this.viewAnim -= dt;
-      this.#applyView(1 - Math.exp(-3.2 * dt));
+      const c = this.controls;
+      const want = V(p.x, p.y + 1.5, p.z);
+      const step = want.sub(c.target).multiplyScalar(1 - Math.exp(-6 * dt));
+      c.target.add(step);
+      this.camera.position.add(step);
+      // while walking, drift round to behind the visitor, like a chase camera
+      if (v.moving) {
+        const off = this.camera.position.clone().sub(c.target);
+        const have = Math.atan2(off.x, off.z);
+        let d = v.heading + Math.PI - have;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        off.applyAxisAngle(V(0, 1, 0), d * (1 - Math.exp(-1.6 * dt)));
+        this.camera.position.copy(c.target).add(off);
+      }
+      // never under the lawn
+      const floor = this.groundY(this.camera.position.x, this.camera.position.z) + 0.5;
+      if (this.camera.position.y < floor) this.camera.position.y = floor;
     }
     // place labels fade with distance, so the view is not buried in text
     this.placeLabels.forEach(({ el, p }) => {
