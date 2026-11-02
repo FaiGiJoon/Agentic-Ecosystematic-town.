@@ -5,6 +5,7 @@ import { StoreError } from './store.js';
 
 const MAX_BODY = 16 * 1024;
 const PING_MS = 25000;
+const MAX_SSE_CLIENTS = 100;
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -72,13 +73,22 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
 
   function broadcast(name, data) {
     const frame = `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of clients) res.write(frame);
+    for (const res of clients) {
+      try {
+        res.write(frame);
+      } catch (err) {
+        clients.delete(res);
+      }
+    }
   }
   store.onChange((msg) => broadcast(msg.type, msg.type === 'ticket' ? msg.ticket : msg.event));
   runner.onAgent((agent) => broadcast('agent', agent));
   desk?.onChange((state) => broadcast('desk', state));
 
   function sse(req, res) {
+    if (clients.size >= MAX_SSE_CLIENTS) {
+      throw new HttpError(429, 'too many sse connections');
+    }
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -86,8 +96,19 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
     });
     res.write(': connected\n\n');
     clients.add(res);
-    const timer = setInterval(() => res.write(': ping\n\n'), PING_MS);
+    const timer = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch (err) {
+        clearInterval(timer);
+        clients.delete(res);
+      }
+    }, PING_MS);
     req.on('close', () => {
+      clearInterval(timer);
+      clients.delete(res);
+    });
+    res.on('error', () => {
       clearInterval(timer);
       clients.delete(res);
     });
@@ -172,11 +193,14 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
   const server = http.createServer(async (req, res) => {
     try {
       const { port } = server.address();
-      if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) {
+      const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+      const host = (req.headers.host || '').toLowerCase().trim();
+      if (!allowedHosts.has(host)) {
         throw new HttpError(403, 'forbidden host');
       }
       const { origin } = req.headers;
-      if (origin !== undefined && origin !== `http://127.0.0.1:${port}` && origin !== `http://localhost:${port}`) {
+      const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://[::1]:${port}`]);
+      if (origin !== undefined && !allowedOrigins.has(origin)) {
         throw new HttpError(403, 'forbidden origin');
       }
       const rawPath = (req.url || '/').split('?')[0].split('#')[0];

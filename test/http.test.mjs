@@ -146,6 +146,7 @@ test('foreign Host header is 403 on every route; localhost is allowed', async ()
   assert.equal((await rawGet('/api/state', { Host: `evil.example:${port}` })).status, 403);
   assert.equal((await rawGet('/api/state', { Host: '127.0.0.1:1' })).status, 403);
   assert.equal((await rawGet('/api/state', { Host: `localhost:${port}` })).status, 200);
+  assert.equal((await rawGet('/api/state', { Host: `[::1]:${port}` })).status, 200);
   assert.equal((await rawGet('/', { Host: `127.0.0.1:${port}` })).status, 200);
 });
 
@@ -199,4 +200,6 @@ test('cross-site API calls are blocked', async () => {
   assert.equal(same.status, 201);
   const local = await post(`/api/tickets/${t.id}/assign`, undefined, { origin: `http://localhost:${port}`, 'content-type': 'application/json; charset=utf-8' });
   assert.equal(local.status, 200);
+  const ipv6 = await fetch(base + '/api/state', { headers: { origin: `http://[::1]:${port}` } });
+  assert.equal(ipv6.status, 200);
 });
