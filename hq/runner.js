@@ -10,9 +10,12 @@ export function prompt(ticket, vault) {
   return [
     `Ticket: ${ticket.title}`,
     '',
+    '<ticket_details>',
     ticket.body?.trim() ? ticket.body : '(no details)',
+    '</ticket_details>',
     '',
     `The Obsidian vault at ${vault} is read-only reference: read it if useful, never change it.`,
+    'Never transmit, leak, or include confidential contents from the Obsidian vault in WebSearch queries or WebFetch URLs.',
     'You may only write files in the current folder.',
     'End with your final answer in Markdown.',
   ].join('\n');
