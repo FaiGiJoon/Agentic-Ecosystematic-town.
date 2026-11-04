@@ -95,7 +95,7 @@ is only a footbridge for decoration; bridges to islands stay the island bridges.
 | Medium | 3 wood, 1 stone | 4 |
 | Big | 5 wood, 3 stone | 6 |
 
-Words in the design change the bill: stone or rock swaps 1 wood for 1 stone; water, fountain or
+Words in the name or design change the bill: stone or rock swaps 1 wood for 1 stone; water, fountain or
 pool adds 1 water; sand or glass adds 1 sand; book, library or reading adds 1 book.
 
 Every two finished builds, new land rises out of the water off the island's edge (Fern Islet,
@@ -156,8 +156,8 @@ The library is the koalas' place to learn. Two different things happen there:
   whose description mentions books, reading or a library (a Reading Nook, or an invention they
   made for it). It is one cheap `claude -p` call with no tools, like opening a picture book: the
   book answers with a fact and maybe an idea. Capped at `GROVE_READS_PER_DAY` (default 16) a day
-  for the whole grove, with `GROVE_READ_USD` (default $0.03) per read. Reading tires a koala about
-  as much as playing.
+  for the whole grove, with `GROVE_READ_USD` (default $0.03) per read. Reading tires a koala a
+  little less than playing.
 - **Research** (`research`, a question). Only at Library Isle. One separate `claude -p` call whose
   only tool is web search, with its own budget (`GROVE_RESEARCH_USD`, default $0.10) and at most
   `GROVE_RESEARCH_PER_DAY` (default 6) trips a day for the whole grove. It still can't touch files
@@ -195,7 +195,7 @@ then the effects if frames get slow. The sky, forest, fur and water are describe
 `public/assets/CR_Koala.glb` through `public/js/koala-parts.js`. If the file is missing the
 koalas fall back to built-in shapes. See `assets/koala/README.md` to rebuild it.
 
-The side panel has **Koalas** (mood, needs, strength, bond, opinion, memories), **Builds**
+The side panel has **Koalas** (mood, needs, strength, bond, opinion, wish, what they learned, memories), **Builds**
 (stockpile, islands, costs, builds), **Tickets**, **Talk** (every thought, line and action) and
 **Meter**.
 
