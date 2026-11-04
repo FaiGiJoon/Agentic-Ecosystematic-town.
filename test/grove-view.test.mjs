@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
+import { critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
 import { PLACES } from '../hq/grove-world.js';
 
 test('koalas at the same place stand apart, and stand beside the pond, not in it', () => {
@@ -112,4 +112,22 @@ test('walking to a bridged resource island crosses its bridge', () => {
   const out = landRoute({ x: 0, z: 2 }, { x: 38, z: -6 }, [sandy]);
   assert.equal(out.length, 2);
   assert.ok(Math.hypot(out[1].x - sandy.x, out[1].z - sandy.z) < sandy.r);
+});
+
+test('critters keep to their homes: turtles crawl, frogs hop by the pond, birds circle up high', () => {
+  const home = { x: 10, z: 2 };
+  for (let t = 0; t <= 60; t += 0.25) {
+    const turtle = critterPath('turtle', t, home);
+    assert.ok(Math.hypot(turtle.x - home.x, turtle.z - home.z) <= 6, `turtle at ${t}`);
+    assert.equal(turtle.y, 0);
+    const frog = critterPath('frog', t, home, 1);
+    assert.ok(Math.hypot(frog.x - home.x, frog.z - home.z) <= 6, `frog at ${t}`);
+    assert.ok(frog.y >= 0, `frog under ground at ${t}`);
+    const bird = critterPath('bird', t, home, 2);
+    assert.ok(bird.y >= 8 && bird.y <= 13, `bird at ${bird.y}`);
+    for (const c of [turtle, frog, bird]) assert.ok(Number.isFinite(c.yaw));
+  }
+  // they move
+  assert.notDeepEqual(critterPath('turtle', 0, home), critterPath('turtle', 20, home));
+  assert.ok(Array.from({ length: 40 }, (_, i) => critterPath('frog', i * 0.25, home).y).some((y) => y > 0.1), 'frogs hop');
 });

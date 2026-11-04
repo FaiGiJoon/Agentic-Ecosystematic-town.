@@ -10,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { Koala } from './koala.js';
 import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
+import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
 import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
@@ -134,6 +135,7 @@ export class GroveScene {
     this.#world(rand, S, lap);
     this.buildLayer = new BuildLayer({ scene: this.scene, tex: this.tex, baseY: (x, z) => T.height(x, z), island: ISLAND });
     this.#buildKoalas(koalas);
+    this.critters = new Critters({ scene: this.scene, groundY: this.groundY, places });
     lap('koalas');
     this.#effects(S);
     lap('effects');
@@ -793,6 +795,7 @@ export class GroveScene {
     this.#koalas_(dt, t);
     this.#toys(dt, t);
     this.buildLayer.update(dt, t, this.night ?? 0);
+    this.critters.update(dt, t, this.night ?? 0);
     this.#life(dt, t);
     this.#camera(dt);
     if (!this.freeCam && this.cam === 'third') this.controls.update();

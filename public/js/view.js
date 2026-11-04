@@ -130,3 +130,27 @@ export function stockText(stock) {
 export function carried(k) {
   return RESOURCE_ORDER.flatMap((r) => Array(Math.max(0, k.res?.[r] ?? 0)).fill(r));
 }
+
+// --- critters --------------------------------------------------------------------------
+// Where a critter is at time t (seconds), around its home. Deterministic, so every page agrees.
+// Turtles crawl a slow loop, frogs hop between three spots by the water, birds circle up high.
+export function critterPath(kind, t, home, phase = 0) {
+  if (kind === 'turtle') {
+    const a = phase + t * 0.06;
+    return { x: home.x + Math.cos(a) * 3, z: home.z + Math.sin(a) * 3, y: 0, yaw: -a };
+  }
+  if (kind === 'frog') {
+    const spot = (i) => {
+      const a = phase + (i % 3) * 2.1;
+      return { x: home.x + Math.cos(a) * 5.3, z: home.z + Math.sin(a) * 5.3 };
+    };
+    const per = 3.2;
+    const n = Math.floor(t / per);
+    const u = Math.min(1, (t - n * per) / 0.55); // a hop takes 0.55 s, then it sits
+    const a = spot(n);
+    const b = spot(n + 1);
+    return { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u, y: u < 1 ? Math.sin(u * Math.PI) * 0.5 : 0, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
+  }
+  const a = phase + t * 0.45;
+  return { x: home.x + Math.cos(a) * 6, z: home.z + Math.sin(a) * 6, y: 10 + Math.sin(t * 0.7 + phase) * 1.5, yaw: -a };
+}
