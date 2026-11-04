@@ -1,7 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { StoreError } from './store.js';
 
 const MAX_BODY = 16 * 1024;
 const PING_MS = 25000;
@@ -14,6 +13,7 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.glb': 'model/gltf-binary',
 };
 
 class HttpError extends Error {
@@ -66,7 +66,8 @@ function readJson(req) {
   });
 }
 
-export function createApp({ store, runner, desk = null, config, publicDir }) {
+// The grove server: its API, the live event stream and the page. Localhost only.
+export function createApp({ grove, publicDir }) {
   const root = path.resolve(publicDir);
   const clients = new Set();
 
@@ -74,9 +75,7 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
     const frame = `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const res of clients) res.write(frame);
   }
-  store.onChange((msg) => broadcast(msg.type, msg.type === 'ticket' ? msg.ticket : msg.event));
-  runner.onAgent((agent) => broadcast('agent', agent));
-  desk?.onChange((state) => broadcast('desk', state));
+  grove.onChange((state) => broadcast('grove', state));
 
   function sse(req, res) {
     res.writeHead(200, {
@@ -93,53 +92,36 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
     });
   }
 
+  // A grove refusal (bad item, full paws, unknown time) keeps its status.
+  function refuse(fn) {
+    try {
+      return fn();
+    } catch (err) {
+      if (err.status) throw new HttpError(err.status, err.message);
+      throw err;
+    }
+  }
+
+  // State, Play/Pause, the clock, the page's heartbeat, and the visitor's actions.
   async function api(req, res, pathname) {
     const method = req.method;
     if (method !== 'GET' && method !== 'HEAD') {
       const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (type !== 'application/json') throw new HttpError(415, 'content-type must be application/json');
     }
-    if (pathname === '/api/state' && method === 'GET') {
-      return sendJson(res, 200, { tickets: store.list(), agent: runner.agent });
-    }
     if (pathname === '/api/events' && method === 'GET') return sse(req, res);
-    if (pathname === '/api/tickets' && method === 'POST') {
-      const { title, body } = await readJson(req);
-      return sendJson(res, 201, store.create({ title, body }));
-    }
-    if (pathname === '/api/desk' || pathname.startsWith('/api/desk/')) return deskApi(req, res, pathname);
-    const m = /^\/api\/tickets\/(\d+)(?:\/(assign|retry))?$/.exec(pathname);
-    if (m) {
-      const id = Number(m[1]);
-      const action = m[2];
-      if (!action && method === 'GET') {
-        const ticket = store.get(id);
-        if (!ticket) throw new StoreError(404, 'ticket not found');
-        return sendJson(res, 200, { ...ticket, events: store.events(id) });
+    if (pathname === '/api/grove' && method === 'GET') return sendJson(res, 200, grove.state());
+    if (method === 'POST') {
+      if (pathname === '/api/grove/play') return sendJson(res, 200, grove.play());
+      if (pathname === '/api/grove/pause') return sendJson(res, 200, grove.pause());
+      if (pathname === '/api/grove/heartbeat') return sendJson(res, 200, grove.heartbeat());
+      if (pathname === '/api/grove/act') {
+        const body = await readJson(req);
+        return sendJson(res, 200, refuse(() => grove.act(body)));
       }
-      if (action && method === 'POST') {
-        const ticket = action === 'assign' ? store.assign(id) : store.retry(id);
-        runner.kick();
-        return sendJson(res, 200, ticket);
-      }
-    }
-    throw new HttpError(404, 'not found');
-  }
-
-  // The paper desk: state, kill switch, and approving or rejecting pending orders.
-  function deskApi(req, res, pathname) {
-    if (!desk) throw new HttpError(404, 'the paper desk is off (DESK=off)');
-    const method = req.method;
-    if (pathname === '/api/desk' && method === 'GET') return sendJson(res, 200, desk.state());
-    if (pathname === '/api/desk/halt' && method === 'POST') return sendJson(res, 200, desk.halt('kill switch'));
-    if (pathname === '/api/desk/resume' && method === 'POST') return sendJson(res, 200, desk.resume());
-    const m = /^\/api\/desk\/orders\/(\d+)\/(approve|reject)$/.exec(pathname);
-    if (m && method === 'POST') {
-      try {
-        return sendJson(res, 200, desk.decideOrder(Number(m[1]), m[2] === 'approve'));
-      } catch (err) {
-        if (err.status) throw new HttpError(err.status, err.message);
-        throw err;
+      if (pathname === '/api/grove/time') {
+        const { to } = await readJson(req);
+        return sendJson(res, 200, refuse(() => grove.setTime(to)));
       }
     }
     throw new HttpError(404, 'not found');
@@ -184,7 +166,7 @@ export function createApp({ store, runner, desk = null, config, publicDir }) {
       else await serveStatic(req, res, rawPath);
     } catch (err) {
       if (res.headersSent) return res.end();
-      if (err instanceof StoreError || err instanceof HttpError) {
+      if (err instanceof HttpError) {
         if (err.status === 413) res.setHeader('Connection', 'close');
         return sendJson(res, err.status, { error: err.message });
       }

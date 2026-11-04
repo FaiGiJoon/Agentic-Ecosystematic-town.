@@ -3,3 +3,7 @@ work/
 logs/
 node_modules/
 .DS_Store
+assets/**/*.blend
+assets/**/*.blend1
+assets/**/review/
+assets/**/ref/
