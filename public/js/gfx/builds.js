@@ -3,6 +3,7 @@
 // new islets rising from the water, and the rope bridges that reach them.
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { buildIslet } from './terrain.js';
 import { bridgeEnds, customPlan, RESOURCE_COLORS } from '../view.js';
@@ -136,17 +137,59 @@ const MODELS = {
 // A koala's invention: draws the primitives customPlan picked for its spec. Materials are
 // cached per colour; glowing parts join the night glows, with a single light per build.
 const planMats = new Map();
-const planMat = (color) => planMats.get(color) ?? planMats.set(color, mat(color)).get(color);
+const planMat = (color, soft) => {
+  const key = color + (soft ? '*' : '');
+  return planMats.get(key) ?? planMats.set(key, mat(color, soft ? { vertexColors: true } : {})).get(key);
+};
+
+// Soft bevelled shapes modelled in Blender (tools/make_kit.py -> models/kit.glb). Until the
+// file arrives, or if it never does, inventions use plain three.js geometry.
+let kit = null;
+const waiting = new Set(); // meshes drawn before the kit loaded, upgraded when it does
+new GLTFLoader().load('models/kit.glb', (gltf) => {
+  const k = {};
+  gltf.scene.traverse((o) => { if (o.isMesh) k[o.name] = o.geometry; });
+  if (k.box && k.cyl && k.cone && k.sphere) kit = k;
+  for (const o of waiting) applyPrim(o, o.userData.prim);
+  waiting.clear();
+}, undefined, () => waiting.clear());
+
+// The soft kit shape for a primitive, or null when it needs a shape the kit lacks
+// (tapered cylinders and pyramid roofs stay plain).
+function kitFor(q) {
+  if (!kit) return null;
+  if (q.type === 'box') return { geo: kit.box, scale: q.size };
+  if (q.type === 'cyl' && Math.abs(q.size[0] - q.size[1]) < 0.01) return { geo: kit.cyl, scale: [q.size[0], q.size[2], q.size[0]] };
+  if (q.type === 'cone' && q.size[2] >= 8) return { geo: kit.cone, scale: [q.size[0], q.size[1], q.size[0]] };
+  if (q.type === 'sphere') return { geo: kit.sphere, scale: [q.size[0], q.size[0], q.size[0]] };
+  return null;
+}
+function plainGeo(q) {
+  return q.type === 'box' ? new THREE.BoxGeometry(...q.size)
+    : q.type === 'cyl' ? new THREE.CylinderGeometry(q.size[0], q.size[1], q.size[2], 10)
+      : q.type === 'cone' ? new THREE.ConeGeometry(q.size[0], q.size[1], q.size[2])
+        : new THREE.IcosahedronGeometry(q.size[0], 1);
+}
+function applyPrim(o, q) {
+  const soft = kitFor(q);
+  o.geometry = soft ? soft.geo : plainGeo(q);
+  o.scale.set(...(soft ? soft.scale : [1, 1, 1]));
+  if (q.glow) {
+    o.material.vertexColors = !!soft;
+    o.material.needsUpdate = true;
+  } else {
+    o.material = planMat(q.color, !!soft);
+  }
+}
+
 MODELS.custom = (g, layer, b) => {
   if (!b?.spec) return MODELS.bench(g);
   let lit = false;
   for (const q of customPlan(b.spec).parts) {
-    const geo = q.type === 'box' ? new THREE.BoxGeometry(...q.size)
-      : q.type === 'cyl' ? new THREE.CylinderGeometry(q.size[0], q.size[1], q.size[2], 10)
-        : q.type === 'cone' ? new THREE.ConeGeometry(q.size[0], q.size[1], q.size[2])
-          : new THREE.IcosahedronGeometry(q.size[0], 1);
-    const m = q.glow ? new THREE.MeshStandardMaterial({ color: q.color, emissive: q.color, emissiveIntensity: 0.3, roughness: 0.5 }) : planMat(q.color);
-    const o = new THREE.Mesh(geo, m);
+    const o = new THREE.Mesh(new THREE.BufferGeometry(), q.glow ? new THREE.MeshStandardMaterial({ color: q.color, emissive: q.color, emissiveIntensity: 0.3, roughness: 0.5 }) : planMat(q.color));
+    o.userData.prim = q;
+    applyPrim(o, q);
+    if (!kit) waiting.add(o);
     o.position.set(...q.pos);
     if (q.rot) o.rotation.set(...q.rot);
     g.add(o);
