@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { buildIslet } from './terrain.js';
-import { bridgeEnds, RESOURCE_COLORS } from '../view.js';
+import { bridgeEnds, customPlan, RESOURCE_COLORS } from '../view.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...extra });
 const WOOD = mat('#8a6a4a');
@@ -133,6 +133,35 @@ const MODELS = {
   },
 };
 
+// A koala's invention: draws the primitives customPlan picked for its spec. Materials are
+// cached per colour; glowing parts join the night glows, with a single light per build.
+const planMats = new Map();
+const planMat = (color) => planMats.get(color) ?? planMats.set(color, mat(color)).get(color);
+MODELS.custom = (g, layer, b) => {
+  if (!b?.spec) return MODELS.bench(g);
+  let lit = false;
+  for (const q of customPlan(b.spec).parts) {
+    const geo = q.type === 'box' ? new THREE.BoxGeometry(...q.size)
+      : q.type === 'cyl' ? new THREE.CylinderGeometry(q.size[0], q.size[1], q.size[2], 10)
+        : q.type === 'cone' ? new THREE.ConeGeometry(q.size[0], q.size[1], q.size[2])
+          : new THREE.IcosahedronGeometry(q.size[0], 1);
+    const m = q.glow ? new THREE.MeshStandardMaterial({ color: q.color, emissive: q.color, emissiveIntensity: 0.3, roughness: 0.5 }) : planMat(q.color);
+    const o = new THREE.Mesh(geo, m);
+    o.position.set(...q.pos);
+    if (q.rot) o.rotation.set(...q.rot);
+    g.add(o);
+    if (q.glow) {
+      const glow = { glass: o };
+      if (!lit) {
+        lit = true;
+        glow.light = new THREE.PointLight(q.color, 0, 6, 1.8);
+        o.add(glow.light);
+      }
+      layer.glows.push(glow);
+    }
+  }
+};
+
 // Dressing for each resource island, so you can tell from the shore what it holds.
 const DRESS = {
   water(g, r) {
@@ -256,7 +285,7 @@ export class BuildLayer {
     // face the clearing, so doors and ladders look into the grove
     group.rotation.y = Math.atan2(-plot.x, 2 - plot.z);
     const model = new THREE.Group();
-    (MODELS[b.kind] ?? MODELS.bench)(model, this);
+    (MODELS[b.kind] ?? MODELS.bench)(model, this, b);
     model.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
@@ -268,13 +297,20 @@ export class BuildLayer {
     el.className = 'build-label';
     el.innerHTML = '<b></b><span class="prog"><i></i></span><small></small>';
     el.querySelector('b').textContent = b.title;
+    if (b.spec?.design) el.title = String(b.spec.design); // hover: the koala's own description
     const label = new CSS2DObject(el);
-    label.position.y = (HEIGHT[b.kind] ?? 2) + 0.7;
+    const height = this.#heightOf(b);
+    label.position.y = height + 0.7;
     group.add(label);
     this.scene.add(group);
     const view = { group, model, el, label, kind: b.kind, done: null, progress: null, grow: 0, want: 0 };
     this.sites.set(b.id, view);
     return view;
+  }
+
+  // custom builds are as tall as their plan; the older kinds have a fixed height
+  #heightOf(b) {
+    return b.kind === 'custom' && b.spec ? customPlan(b.spec).height : HEIGHT[b.kind] ?? 2;
   }
 
   #shape(view, b) {
@@ -284,7 +320,7 @@ export class BuildLayer {
     view.want = b.done ? 1 : 0.15 + 0.85 * (b.progress / b.effort) * 0.9;
     if (firstLook) view.grow = view.want;
     if (!b.done && !view.scaffold) {
-      view.scaffold = scaffold(HEIGHT[b.kind] ?? 2);
+      view.scaffold = scaffold(this.#heightOf(b));
       view.group.add(view.scaffold);
     }
     if (b.done && view.scaffold) {
@@ -396,7 +432,7 @@ export class BuildLayer {
       v.bridgeMesh.visible = v.open && k > 0.8;
     }
     for (const g of this.glows) {
-      g.light.intensity = night * 5;
+      if (g.light) g.light.intensity = night * 5;
       g.glass.material.emissiveIntensity = 0.3 + night * 4 + Math.sin(t * 3 + g.glass.position.x) * 0.15 * night; // blooms at night
     }
   }

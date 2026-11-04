@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { panelStartsCollapsed, postureFor, critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
+import { customPlan, panelStartsCollapsed, postureFor, critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
 import { PLACES } from '../hq/grove-world.js';
 
 test('koalas at the same place stand apart, and stand beside the pond, not in it', () => {
@@ -155,4 +155,40 @@ test('the side panel starts tucked away when it would cover too much of the grov
   assert.equal(panelStartsCollapsed(2560), false);
   assert.equal(panelStartsCollapsed(1000), true, 'narrow desktop or tablet: the grove comes first');
   assert.equal(panelStartsCollapsed(375), false, 'phones use the bottom sheet instead');
+});
+
+// --- custom builds ---
+const SHAPES = ['house', 'tower', 'machine', 'bridge', 'garden', 'statue', 'shelter', 'playground', 'boat'];
+const PARTS = ['roof', 'door', 'window', 'flag', 'wheel', 'screen', 'buttons', 'lights', 'chimney', 'slide', 'flowers', 'sign', 'dome', 'stairs', 'bell', 'star'];
+
+test('customPlan: every shape yields a drawable plan with a finite height', () => {
+  for (const shape of SHAPES) for (const size of ['small', 'medium', 'big']) {
+    const p = customPlan({ shape, size, parts: [], colors: ['blue'] });
+    assert.ok(p.parts.length >= 3, shape);
+    assert.ok(Number.isFinite(p.height) && p.height > 0, shape);
+    for (const q of p.parts) assert.ok(['box', 'cyl', 'cone', 'sphere'].includes(q.type) && q.size.every(Number.isFinite) && q.pos.every(Number.isFinite) && /^#/.test(q.color));
+  }
+});
+
+test('customPlan: parts add primitives, glowing parts glow, and each part works on every shape', () => {
+  for (const shape of SHAPES) {
+    const base = customPlan({ shape, size: 'medium', parts: [], colors: [] }).parts.length;
+    for (const part of PARTS) assert.ok(customPlan({ shape, size: 'medium', parts: [part], colors: [] }).parts.length > base, `${shape}+${part}`);
+  }
+  for (const part of ['screen', 'lights', 'star']) assert.ok(customPlan({ shape: 'house', size: 'medium', parts: [part], colors: [] }).parts.some((q) => q.glow), part);
+  assert.ok(!customPlan({ shape: 'house', size: 'medium', parts: [], colors: [] }).parts.some((q) => q.glow));
+});
+
+test('customPlan: unknown shape falls back to shelter, size scales, colours are used, footprint stays small', () => {
+  const a = customPlan({ shape: 'spaceship', size: 'medium', parts: [], colors: [] });
+  const b = customPlan({ shape: 'shelter', size: 'medium', parts: [], colors: [] });
+  assert.deepEqual(a, b);
+  const small = customPlan({ shape: 'tower', size: 'small', parts: [], colors: [] }).height;
+  const big = customPlan({ shape: 'tower', size: 'big', parts: [], colors: [] }).height;
+  assert.ok(big > small * 1.5);
+  const pink = customPlan({ shape: 'house', size: 'medium', parts: ['door'], colors: ['pink'] });
+  const blue = customPlan({ shape: 'house', size: 'medium', parts: ['door'], colors: ['blue'] });
+  assert.notDeepEqual(pink.parts.map((q) => q.color), blue.parts.map((q) => q.color));
+  for (const shape of SHAPES) for (const q of customPlan({ shape, size: 'big', parts: PARTS.slice(0, 8), colors: ['red', 'gold'] }).parts) assert.ok(Math.abs(q.pos[0]) <= 1.6 && Math.abs(q.pos[2]) <= 1.6, `${shape} ${q.type} ${q.pos}`);
+  assert.ok(customPlan(undefined).parts.length >= 3);
 });

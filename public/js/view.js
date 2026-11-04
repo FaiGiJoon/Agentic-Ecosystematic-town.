@@ -185,3 +185,127 @@ export function glide(speed, distance, dt, { max, accel }) {
 export function panelStartsCollapsed(width) {
   return width > 820 && width < 1100;
 }
+
+// --- koala inventions ----------------------------------------------------------------------
+// A custom build is a few primitives picked from its spec: pure data, so Node can test it and
+// builds.js turns it into meshes. Authored at medium size; width grows less than height so the
+// footprint stays inside a plot.
+export const BUILD_COLORS = {
+  pink: '#f08aa0', blue: '#5b9bd5', red: '#d9534f', green: '#6f9a62', yellow: '#f2c14e', purple: '#a98bd8',
+  orange: '#ef8f3c', white: '#f4efe4', gold: '#d9a93a', silver: '#b8c0c8', black: '#3a3a40',
+};
+const WOOD_TONES = ['#8a6a4a', '#c9a77c', '#b05a3c'];
+const SIZE_H = { small: 0.7, medium: 1, big: 1.4 };
+const SIZE_W = { small: 0.8, medium: 1, big: 1.15 };
+
+export function customPlan(spec) {
+  const shape = SHAPES[spec?.shape] ? spec.shape : 'shelter';
+  const h = SIZE_H[spec?.size] ?? 1;
+  const w = SIZE_W[spec?.size] ?? 1;
+  const named = (spec?.colors ?? []).filter((c) => BUILD_COLORS[c]).map((c) => BUILD_COLORS[c]);
+  const palette = named.length ? named : WOOD_TONES;
+  const col = (i) => palette[i % palette.length];
+  const out = [];
+  // Unit-scale authoring: size/pos given in medium metres, scaled here.
+  const add = (type, size, pos, color, extra = {}) => {
+    const s = type === 'box' ? [size[0] * w, size[1] * h, size[2] * w] : type === 'cyl' ? [size[0] * w, size[1] * w, size[2] * h] : type === 'cone' ? [size[0] * w, size[1] * h, size[2] ?? 8] : [size[0] * (w + h) / 2];
+    out.push({ type, size: s, pos: [pos[0] * w, pos[1] * h, pos[2] * w], color, ...extra });
+  };
+  const ctx = SHAPES[shape]({ add, col });
+  const set = new Set(spec?.parts ?? []);
+  for (const p of PART_ORDER) if (set.has(p)) PARTS[p]({ add, col }, ctx);
+  let height = 0.3;
+  for (const q of out) height = Math.max(height, q.pos[1] + (q.type === 'sphere' ? q.size[0] : q.type === 'cyl' ? q.size[2] / 2 : q.size[1] / 2));
+  return { parts: out, height };
+}
+
+const DARKWOOD = '#4a3626';
+const GLASSY = '#bfe3f2';
+const SHAPES = {
+  house: ({ add, col }) => {
+    add('box', [1.8, 1.2, 1.6], [0, 0.6, 0], col(0));
+    add('cone', [1.45, 0.9, 4], [0, 1.65, 0], col(1), { rot: [0, Math.PI / 4, 0] });
+    add('box', [0.5, 0.85, 0.06], [0, 0.43, 0.82], DARKWOOD);
+    return { hw: 0.9, hd: 0.8, top: 2.1, wallH: 1.2 };
+  },
+  tower: ({ add, col }) => {
+    add('cyl', [0.75, 0.95, 3.2], [0, 1.6, 0], col(0));
+    add('cyl', [1.05, 1.05, 0.2], [0, 3.3, 0], col(1));
+    add('cone', [1.1, 1.0], [0, 3.9, 0], col(2));
+    return { hw: 0.9, hd: 0.9, top: 4.4, wallH: 3.2 };
+  },
+  machine: ({ add, col }) => {
+    add('box', [1.6, 1.5, 1.0], [0, 0.85, 0], col(0));
+    add('box', [0.3, 0.2, 0.3], [-0.6, 0.1, 0.3], DARKWOOD);
+    add('box', [0.3, 0.2, 0.3], [0.6, 0.1, 0.3], DARKWOOD);
+    add('cyl', [0.12, 0.12, 0.5], [0.5, 1.85, 0], col(1));
+    return { hw: 0.8, hd: 0.5, top: 1.6, wallH: 1.5 };
+  },
+  bridge: ({ add, col }) => {
+    add('box', [1.2, 0.16, 1.0], [0, 0.55, 0], col(0));
+    for (const s of [-1, 1]) {
+      add('box', [0.8, 0.16, 1.0], [s * 0.95, 0.35, 0], col(0), { rot: [0, 0, -s * 0.3] });
+      add('box', [2.7, 0.07, 0.07], [0, 1.05, s * 0.5], col(1));
+      add('cyl', [0.06, 0.06, 0.8], [s * 1.1, 0.65, s * 0.5], col(1));
+      add('cyl', [0.06, 0.06, 0.8], [-s * 1.1, 0.65, s * 0.5], col(1));
+    }
+    return { hw: 1.1, hd: 0.5, top: 1.1, wallH: 0.6 };
+  },
+  garden: ({ add, col }) => {
+    add('box', [2.2, 0.3, 1.6], [0, 0.15, 0], col(0));
+    add('box', [2.0, 0.12, 1.4], [0, 0.32, 0], DARKWOOD);
+    add('sphere', [0.35], [-0.5, 0.55, -0.2], '#6f9a62');
+    for (let i = 0; i < 4; i++) add('sphere', [0.13], [-0.8 + i * 0.5, 0.5, 0.35], col(i + 1));
+    return { hw: 1.0, hd: 0.7, top: 0.7, wallH: 0.35 };
+  },
+  statue: ({ add, col }) => {
+    add('box', [1.0, 0.6, 1.0], [0, 0.3, 0], '#a9a196');
+    add('cyl', [0.3, 0.42, 1.1], [0, 1.15, 0], col(0));
+    add('sphere', [0.3], [0, 1.95, 0], col(0));
+    add('sphere', [0.12], [-0.38, 1.75, 0], col(1));
+    add('sphere', [0.12], [0.38, 1.75, 0], col(1));
+    return { hw: 0.5, hd: 0.5, top: 2.3, wallH: 1.7 };
+  },
+  shelter: ({ add, col }) => {
+    for (const [x, z] of [[-0.9, -0.7], [0.9, -0.7], [-0.9, 0.7], [0.9, 0.7]]) add('cyl', [0.09, 0.11, 1.8], [x, 0.9, z], col(0));
+    add('cone', [1.7, 0.8, 4], [0, 2.2, 0], col(1), { rot: [0, Math.PI / 4, 0] });
+    add('box', [1.5, 0.12, 0.4], [0, 0.4, -0.5], col(2));
+    return { hw: 0.9, hd: 0.7, top: 2.6, wallH: 1.8 };
+  },
+  playground: ({ add, col }) => {
+    for (const x of [-0.9, 0.9]) {
+      add('cyl', [0.07, 0.07, 1.8], [x, 0.9, -0.2], col(0), { rot: [0, 0, x * 0.18] });
+      add('cyl', [0.07, 0.07, 1.8], [x, 0.9, 0.5], col(0), { rot: [0, 0, x * 0.18] });
+    }
+    add('cyl', [0.06, 0.06, 2.1], [0, 1.78, 0.15], col(1), { rot: [0, 0, Math.PI / 2] });
+    for (const x of [-0.4, 0.4]) add('box', [0.4, 0.06, 0.25], [x, 0.4, 0.15], col(2));
+    return { hw: 1.0, hd: 0.5, top: 1.85, wallH: 1.8 };
+  },
+  boat: ({ add, col }) => {
+    add('box', [2.0, 0.5, 1.0], [0, 0.4, 0], col(0));
+    add('cone', [0.5, 0.5, 4], [1.2, 0.4, 0], col(0), { rot: [0, Math.PI / 4, -Math.PI / 2] });
+    add('cyl', [0.05, 0.06, 2.2], [0, 1.6, 0], DARKWOOD);
+    add('box', [0.04, 1.4, 0.9], [0, 1.65, 0.05], col(1));
+    return { hw: 1.0, hd: 0.5, top: 2.7, wallH: 0.7 };
+  },
+};
+
+const PART_ORDER = ['roof', 'dome', 'chimney', 'door', 'window', 'screen', 'buttons', 'lights', 'wheel', 'slide', 'stairs', 'sign', 'flowers', 'bell', 'flag', 'star'];
+const PARTS = {
+  roof: ({ add, col }, c) => add('cone', [c.hw * 1.15, 0.5, 6], [0, c.top + 0.15, 0], col(2)),
+  dome: ({ add, col }, c) => add('sphere', [c.hw * 0.7], [0, c.top + 0.1, 0], col(1)),
+  chimney: ({ add, col }, c) => add('box', [0.3, 0.6, 0.3], [c.hw * 0.5, c.top, -c.hd * 0.3], col(2)),
+  door: ({ add }, c) => add('box', [0.45, 0.75, 0.08], [0, 0.38, c.hd + 0.05], DARKWOOD),
+  window: ({ add }, c) => { for (const s of [-1, 1]) add('box', [0.06, 0.35, 0.35], [s * (c.hw + 0.03), Math.max(0.5, c.wallH * 0.6), 0], GLASSY); },
+  screen: ({ add }, c) => add('box', [0.7, 0.5, 0.06], [0, Math.max(0.6, c.wallH * 0.65), c.hd + 0.04], '#8fe3c0', { glow: true }),
+  buttons: ({ add, col }, c) => { for (let i = 0; i < 3; i++) add('sphere', [0.07], [-0.25 + i * 0.25, Math.max(0.35, c.wallH * 0.3), c.hd + 0.06], col(i + 1)); },
+  lights: ({ add }, c) => { for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add('sphere', [0.1], [x * c.hw * 0.9, c.top * 0.55, z * c.hd * 0.9], '#ffe08a', { glow: true }); },
+  wheel: ({ add, col }, c) => { for (const s of [-1, 1]) add('cyl', [0.3, 0.3, 0.12], [s * (c.hw + 0.05), 0.3, 0], col(1), { rot: [0, 0, Math.PI / 2] }); },
+  slide: ({ add, col }, c) => add('box', [0.5, 0.08, 1.4], [c.hw + 0.3, 0.55, 0.2], col(1), { rot: [0.6, 0, 0] }),
+  stairs: ({ add, col }, c) => { for (let i = 0; i < 3; i++) add('box', [0.8, 0.14, 0.25], [0, 0.07 + i * 0.14, c.hd + 0.5 - i * 0.2], col(1)); },
+  sign: ({ add, col }, c) => { add('cyl', [0.04, 0.04, 0.8], [-c.hw * 0.7, 0.4, c.hd + 0.4], DARKWOOD); add('box', [0.6, 0.3, 0.05], [-c.hw * 0.7, 0.85, c.hd + 0.4], col(2)); },
+  flowers: ({ add, col }, c) => { for (let i = 0; i < 4; i++) add('sphere', [0.1], [-0.6 + i * 0.4, 0.14, c.hd + 0.25], col(i + 1)); },
+  bell: ({ add }, c) => add('cone', [0.2, 0.28, 8], [0.3, c.top + 0.1, 0], '#d9a93a'),
+  flag: ({ add, col }, c) => { add('cyl', [0.03, 0.03, 1.0], [-c.hw * 0.6, c.top + 0.4, 0], DARKWOOD); add('box', [0.5, 0.3, 0.03], [-c.hw * 0.6 + 0.27, c.top + 0.75, 0], col(1)); },
+  star: ({ add }, c) => add('sphere', [0.18], [0, c.top + 0.9, 0], '#ffe27a', { glow: true }),
+};
