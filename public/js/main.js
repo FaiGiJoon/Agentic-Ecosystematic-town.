@@ -44,7 +44,7 @@ connectGrove({
     if (ui) ui.offline(err?.message);
     else {
       const el = document.getElementById('boot');
-      el.textContent = err?.message || 'Connecting to Agent HQ…';
+      el.textContent = err?.message || 'Connecting to the grove server…';
       el.hidden = false;
     }
   },

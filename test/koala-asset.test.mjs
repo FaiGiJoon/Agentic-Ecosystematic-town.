@@ -1,10 +1,10 @@
-// The Blender-made koala (public/grove/assets/CR_Koala.glb) is read by koala-parts.js. These
+// The Blender-made koala (public/assets/CR_Koala.glb) is read by koala-parts.js. These
 // checks read the GLB header and JSON chunk directly, so they need neither three.js nor a GPU.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const file = new URL('../public/grove/assets/CR_Koala.glb', import.meta.url);
+const file = new URL('../public/assets/CR_Koala.glb', import.meta.url);
 const buf = fs.readFileSync(file);
 
 function json() {

@@ -1,6 +1,6 @@
 # CR_Koala
 
-The koala's body, modelled in Blender and shipped as `public/grove/assets/CR_Koala.glb`.
+The koala's body, modelled in Blender and shipped as `public/assets/CR_Koala.glb`.
 
 | Path | What |
 | --- | --- |
@@ -19,7 +19,7 @@ blender --background --python $S/init_master.py -- --name CR_Koala --height 1.85
 blender --background --python build/03_forms.py -- --master CR_Koala_master.blend
 blender --background --python $S/validate.py -- --blend $PWD/CR_Koala_master.blend --collections LOW --budget-tris 12000 --require-uv
 blender --background --python $S/export_delivery.py -- --blend $PWD/CR_Koala_master.blend --out $PWD/exports --name CR_Koala --format GLB --collections LOW --no-animation --engine three.js
-cp exports/CR_Koala.glb ../../public/grove/assets/CR_Koala.glb
+cp exports/CR_Koala.glb ../../public/assets/CR_Koala.glb
 ```
 
 `ref/game-closeup.png` is a screenshot of the old in-game koala; take a new one from the game if it is missing.

@@ -1,9 +1,11 @@
 #!/bin/sh
-# Stop Agent HQ and remove the login item and the "Agent HQ" app. Tickets in data/ are kept.
+# Stop Koala Grove and remove the login item and the "Koala Grove" app (and the older Agent HQ ones).
+# The koalas' memories in data/ are kept.
 set -eu
 
-LABEL=com.agent-hq.server
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
-rm -rf "$HOME/Applications/Agent HQ.app"
-echo "Agent HQ no longer starts at login."
+for LABEL in com.koala-grove.server com.agent-hq.server; do
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
+done
+rm -rf "$HOME/Applications/Koala Grove.app" "$HOME/Applications/Agent HQ.app"
+echo "Koala Grove no longer starts at login."

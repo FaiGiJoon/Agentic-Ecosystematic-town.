@@ -49,7 +49,7 @@ export function freshLog(log, lastId) {
 
 // Why the koalas are, or are not, thinking right now.
 export function statusOf(s) {
-  if (!s) return { key: 'offline', text: 'The HQ server is not answering. Is it running?' };
+  if (!s) return { key: 'offline', text: 'The grove server is not answering. Is it running?' };
   if (!s.playing) return { key: 'paused', text: s.pausedReason ? `Paused: ${s.pausedReason}` : 'Paused. Press Play to wake the koalas.' };
   if (s.capped) return { key: 'capped', text: "Today's spend cap is reached. The koalas rest until tomorrow." };
   if (!s.present) return { key: 'away', text: 'Waiting for this page to check in.' };

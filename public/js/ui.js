@@ -369,7 +369,7 @@ export function createUI({ scene, api }) {
     },
     offline(msg) {
       $('#chips').innerHTML = `<div class="chip status offline"><i></i>Offline</div>`;
-      $('#status-line').textContent = msg || 'Lost the connection to Agent HQ. Reconnecting…';
+      $('#status-line').textContent = msg || 'Lost the connection to the grove server. Reconnecting…';
     },
     tick(dt) {
       second += dt;

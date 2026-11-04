@@ -1,11 +1,11 @@
 #!/bin/sh
-# Start Agent HQ at login (macOS LaunchAgent) and add an "Agent HQ" app that opens the dashboard.
+# Start Koala Grove at login (macOS LaunchAgent) and add a "Koala Grove" app that opens it.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
-LABEL=com.agent-hq.server
+LABEL=com.koala-grove.server
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-APP="$HOME/Applications/Agent HQ.app"
+APP="$HOME/Applications/Koala Grove.app"
 NODE=$(command -v node)
 PORT=${PORT:-4317}
 # launchd starts with a bare PATH; keep node's and claude's folders on it.
@@ -37,12 +37,16 @@ cat > "$PLIST" <<PLIST
 </plist>
 PLIST
 
+# The older Agent HQ login item served the same port; take it out first.
+launchctl bootout "gui/$(id -u)/com.agent-hq.server" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.agent-hq.server.plist"
+rm -rf "$HOME/Applications/Agent HQ.app"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
 rm -rf "$APP"
 osacompile -o "$APP" -e "open location \"http://127.0.0.1:$PORT\""
 
-echo "Agent HQ starts at login and is running now on http://127.0.0.1:$PORT"
+echo "Koala Grove starts at login and is running now on http://127.0.0.1:$PORT"
 echo "Open it with: $APP (drag it to the Dock)"
 echo "Logs: $ROOT/logs/server.log"

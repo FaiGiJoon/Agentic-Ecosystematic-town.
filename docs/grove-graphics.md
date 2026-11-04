@@ -6,7 +6,7 @@ graphics upgrade. Measured numbers are from the fixed capture views in `data/dev
 ## 1. Audit of the original renderer
 
 Stack: three.js 0.160.0 from jsDelivr (pinned, with a CSP hash on the import map), plain ES
-modules, no build step. The grove page is `public/grove/`; the iPhone build in `data/phone/`
+modules, no build step. The grove page is `public/`; the iPhone build in `data/phone/`
 is generated from the same files by `data/phone/build.mjs`.
 
 Measured on the original code, 1440×900, devicePixelRatio 1, RTX 4060 laptop GPU, grass and
@@ -68,7 +68,7 @@ dependency, no binary assets: textures are generated procedurally at load.
 
 ## 3. What was built
 
-All of it is in `public/grove/js/gfx/` and `scene.js` / `koala.js`; no new dependency, no
+All of it is in `public/js/gfx/` and `scene.js` / `koala.js`; no new dependency, no
 downloaded assets (every texture is generated at load).
 
 | Area | What changed |

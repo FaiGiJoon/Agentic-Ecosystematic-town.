@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hash2, valueNoise, fbm, ridged, heightToNormal, rng } from '../public/grove/js/gfx/noise.js';
-import { makeTerrain, ISLAND, POND_R, SHORE_R, WATER_Y } from '../public/grove/js/gfx/terrain-math.js';
-import { SETTINGS, TIERS, pickInitialTier, ladder, Governor, parseQuality } from '../public/grove/js/gfx/quality.js';
+import { hash2, valueNoise, fbm, ridged, heightToNormal, rng } from '../public/js/gfx/noise.js';
+import { makeTerrain, ISLAND, POND_R, SHORE_R, WATER_Y } from '../public/js/gfx/terrain-math.js';
+import { SETTINGS, TIERS, pickInitialTier, ladder, Governor, parseQuality } from '../public/js/gfx/quality.js';
 import { PLACES } from '../hq/grove-world.js';
 
 test('noise is deterministic, in range and different per seed', () => {

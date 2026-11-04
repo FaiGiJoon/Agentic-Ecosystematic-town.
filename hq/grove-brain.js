@@ -1,10 +1,22 @@
 // A koala's brain: one isolated, tool-less `claude -p` call per decision, on the
-// user's existing Claude Code login. Same isolation as the ticket runner, but no
+// user's existing Claude Code login: shut off from your own Claude settings, with no
 // tools at all, a small model, a per-call budget and schema-checked JSON output.
 
 import { spawn } from 'node:child_process';
 import { DECISION_SCHEMA } from './grove-world.js';
-import { usageFrom } from './runner.js';
+
+// Cost and token counts from Claude's final result message, or null if it has none.
+export function usageFrom(result) {
+  if (!result || typeof result !== 'object' || typeof result.total_cost_usd !== 'number') return null;
+  const u = result.usage || {};
+  const n = (v) => (Number.isFinite(v) ? v : 0);
+  return {
+    cost_usd: result.total_cost_usd,
+    tokens_in: n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens),
+    tokens_out: n(u.output_tokens),
+    duration_ms: Number.isFinite(result.duration_ms) ? result.duration_ms : null,
+  };
+}
 
 export function koalaArgs({ system, prompt, model, callUsd }) {
   return [

@@ -1,3 +1,4 @@
+/* Shared glass chrome for the grove: top bar, side panel, tabs, inspector, feed, toast. grove.css builds on it. */
 :root {
   --bg: #0d1220;
   --glass: rgba(14, 20, 36, 0.82);
@@ -24,25 +25,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .label-layer { position: absolute; inset: 0; pointer-events: none; }
 
 /* ---------- in-world labels ---------- */
-.agent-label {
-  pointer-events: auto; cursor: pointer;
-  font: 600 11px var(--sans); padding: 2px 7px 2px 5px; border-radius: 999px;
-  background: rgba(13, 18, 32, 0.72); color: #fff; white-space: nowrap;
-  display: flex; align-items: center; gap: 5px; transform: translateY(-4px);
-}
-.agent-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.agent-label.napping { opacity: 0.55; }
-.agent-label.selected { background: var(--gold); color: #1b1f27; }
-.district-label {
-  font: 700 12px var(--sans); letter-spacing: 0.12em; text-transform: uppercase;
-  color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); white-space: nowrap;
-}
-.plot-label {
-  font: 600 10px var(--mono); color: #fff; background: rgba(13, 18, 32, 0.6);
-  padding: 2px 6px; border-radius: 6px; white-space: nowrap;
-}
-.plot-label b { color: var(--gold); }
-.plot-label.done { background: rgba(79, 209, 139, 0.75); color: #0d1220; }
 .bubble {
   max-width: 220px; padding: 7px 10px; border-radius: 12px; font: 500 12px/1.35 var(--sans);
   background: #fff; color: #1b1f27; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
@@ -51,7 +33,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bubble.show { opacity: 1; transform: none; }
 .bubble.think { background: rgba(196, 138, 240, 0.92); color: #fff; font-style: italic; font-size: 11px; }
 .bubble.say::after { content: ''; position: absolute; left: 50%; bottom: -6px; border: 6px solid transparent; border-top-color: #fff; border-bottom: 0; margin-left: -6px; }
-.float-text { font: 700 14px var(--mono); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); transition: opacity 0.2s; }
 
 /* ---------- top bar ---------- */
 #topbar {
@@ -110,44 +91,14 @@ h3:first-child { margin-top: 0; }
 .state { font: 10px var(--mono); color: var(--muted); }
 .zz { color: var(--violet); font-weight: 700; }
 
-/* exchange */
 .disclaimer { font-size: 11px; color: var(--muted); padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; margin-bottom: 12px; }
-.coins { display: flex; gap: 6px; }
-.coin-tab { flex: 1; padding: 8px; border-radius: 10px; background: var(--glass-2); border: 1px solid var(--line); text-align: left; }
-.coin-tab.on { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); }
-.coin-tab .s { font: 700 13px var(--mono); color: var(--c); }
-.coin-tab .p { font: 700 15px var(--mono); }
-.up { color: var(--green); }
-.down { color: var(--red); }
-.chart { width: 100%; height: 150px; display: block; margin-top: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
-.trade { display: flex; gap: 6px; margin-top: 10px; }
-.trade input { flex: 1; min-width: 0; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--text); font: 13px var(--mono); }
 .btn { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 700; font-size: 13px; }
 .btn.buy { background: var(--green); color: #0d1220; }
 .btn.sell { background: var(--red); color: #0d1220; }
 .btn.ghost { background: var(--glass-2); border: 1px solid var(--line); }
 .btn.small { padding: 5px 9px; font-size: 11px; }
-.wallet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font: 12px var(--mono); }
-.wallet div { background: var(--glass-2); padding: 7px 9px; border-radius: 10px; }
-.fund { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 9px; border-radius: 10px; background: var(--glass-2); margin-bottom: 6px; }
-.fund .actions { display: flex; gap: 4px; }
-.tape { font: 11px var(--mono); color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 
-/* tickets */
-.ticket { padding: 9px 10px; border-radius: 10px; background: var(--glass-2); margin-bottom: 6px; border-left: 3px solid var(--c); }
-.ticket .t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
-.ticket .who { font: 11px var(--mono); color: var(--muted); }
-.steps { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; }
-.steps li { padding: 3px 0 3px 10px; border-left: 1px solid var(--line); color: #c9d2e0; }
-.steps b { color: var(--c); font: 700 10px var(--mono); text-transform: uppercase; margin-right: 6px; }
-.pill { font: 700 10px var(--mono); padding: 2px 6px; border-radius: 6px; background: var(--c); color: #0d1220; white-space: nowrap; height: fit-content; }
 
-/* chat */
-#chat-feed { display: flex; flex-direction: column; gap: 6px; }
-.msg { padding: 7px 10px; border-radius: 10px; background: var(--glass-2); font-size: 13px; line-height: 1.4; }
-.msg .h { font: 11px var(--mono); color: var(--muted); margin-bottom: 2px; }
-.msg .h b { color: var(--c); }
-.topic { float: right; font: 10px var(--mono); color: var(--muted); }
 
 /* inspector */
 #inspector {
@@ -179,27 +130,7 @@ h3:first-child { margin-top: 0; }
   #inspector { left: 8px; right: 8px; width: auto; bottom: calc(46vh + 16px); }
 }
 
-/* ---------- Agent HQ (real) ---------- */
+/* ---------- links and real-usage tint ---------- */
 .back { padding: 8px 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font: 12px var(--mono); white-space: nowrap; backdrop-filter: blur(10px); }
 .back:hover, .back:focus-visible { border-color: #d97757; color: #f4a37f; }
 .big.real .stat { border-color: rgba(217, 119, 87, 0.45); background: rgba(217, 119, 87, 0.08); }
-.hq-form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.hq-form input, .hq-form textarea { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--text); font: 13px var(--sans); resize: vertical; }
-.hq-form input:focus-visible, .hq-form textarea:focus-visible { outline: 2px solid #d97757; outline-offset: 1px; }
-.hq-form .trade { margin-top: 0; }
-.ticket.real { background: rgba(217, 119, 87, 0.07); }
-.ticket .out { margin-top: 6px; font-size: 12px; color: #c9d2e0; line-height: 1.4; }
-.ticket .vault { color: #c4b5fd; margin-top: 4px; }
-.ticket .trade { margin-top: 6px; }
-.disclaimer code { font: 11px var(--mono); color: var(--cyan); }
-.chip b.down { color: var(--red); }
-
-/* ---------- live paper desk ---------- */
-.desk { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
-.desk-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.desk-head h3 { margin: 0; }
-.desk .coin-tab { cursor: default; }
-.desk .disclaimer { margin: 8px 0; }
-.desk-row { cursor: default; border-left: 3px solid var(--c); }
-.desk-row .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.desk .rows { margin-top: 8px; }

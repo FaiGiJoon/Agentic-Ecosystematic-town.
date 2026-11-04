@@ -1,4 +1,4 @@
-// The grove page's line to the HQ server: the grove API, the shared event stream,
+// The page's line to the grove server: the grove API, the event stream,
 // and the heartbeat that tells the server this page is open (no heartbeat, no thinking).
 
 async function request(url, opts) {

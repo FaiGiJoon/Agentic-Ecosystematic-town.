@@ -1,4 +1,4 @@
-/* Koala Grove interface. The district's glass chrome (district.css) is the base; this file
+/* Koala Grove interface. The shared glass chrome (base.css) is the base; this file
    gives the grove its own design language: one set of tokens, one type scale, SVG icons,
    44 px touch targets, and a bottom sheet on phones. Mint is the grove's accent; the
    Claude-orange tint is reserved for real model spend. */
@@ -225,7 +225,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 @media (max-width: 820px) {
   #hint { display: none; }
   #topbar { left: 10px; right: 10px; flex-wrap: wrap; gap: 6px; }
-  #topbar .back[href='../district/'], #topbar .back[href='../'] { display: none; }
   .brand .title { font-size: var(--fs-s); }
   .chips .chip:nth-child(n + 3) { display: none; }
   #panel { top: auto; left: 8px; right: 8px; width: auto; height: 46vh; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); border-radius: 22px 22px var(--r-l) var(--r-l); }
