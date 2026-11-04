@@ -418,6 +418,12 @@ export class Koala {
       case 'ball':
         aL = aR = -1.3 + Math.sin(s * 4) * 0.6; pitch = 0.15 + Math.sin(s * 4) * 0.08; headX = -0.15;
         break;
+      case 'build': {
+        // hammering: the right paw comes down hard and lifts slowly, the left one steadies the work
+        const hit = Math.sqrt(Math.abs(Math.sin(s * 4.5)));
+        aR = -2.7 + hit * 1.5; aL = -1.15; pitch = 0.28; headX = 0.32 + (1 - hit) * 0.06; z = 0.05;
+        break;
+      }
       default:
         headY = Math.sin(s * 0.45) * 0.45 + Math.sin(s * 1.3) * 0.08;
         headX = Math.sin(s * 0.3) * 0.08;

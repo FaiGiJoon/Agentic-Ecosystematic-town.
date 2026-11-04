@@ -158,3 +158,16 @@ test('governor ignores pauses (tab switches) and bad numbers', () => {
   for (const dt of [0, -1, NaN, 0.5, 3]) assert.equal(g.sample(dt), null);
   assert.equal(g.frames, 0);
 });
+
+test('build plots are kept clear of trees and rocks', async () => {
+  const { makeTerrain } = await import('../public/js/gfx/terrain-math.js');
+  const { PLACES, PLOTS } = await import('../hq/grove-world.js');
+  const main = PLOTS.filter((p) => !p.land);
+  const open = makeTerrain(PLACES);
+  const kept = makeTerrain(PLACES, { clear: main });
+  assert.ok(main.some((p) => !open.blocked(p.x + 1.5, p.z)), 'without the list, trees could grow on a plot');
+  for (const p of main) {
+    assert.equal(kept.blocked(p.x, p.z), true, p.id);
+    assert.equal(kept.blocked(p.x + 1.5, p.z - 1), true, p.id);
+  }
+});

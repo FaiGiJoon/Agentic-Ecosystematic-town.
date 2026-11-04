@@ -17,7 +17,7 @@ export function spotFor(places, placeId, koalaId, activity, reach = 1) {
     return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: (activity === 'climb' ? 3.0 : 2.4) * reach };
   }
   if (placeId === 'swing' && activity === 'play') return { x: p.x + side * 1.1, z: p.z, y: 0 };
-  const r = placeId === 'pond' ? 5.4 : p.tree ? 1.9 : placeId === 'swing' ? 2.4 : 1.6;
+  const r = placeId === 'pond' ? 5.4 : p.tree ? 1.9 : placeId === 'swing' || p.build ? 2.4 : p.land ? 1.4 : 1.6;
   const a = Math.atan2(-p.z, -p.x) + side * 0.55;
   return { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r, y: 0 };
 }
@@ -27,7 +27,38 @@ export function animFor({ activity, place }) {
   if (activity === 'eat') return 'eat';
   if (activity === 'climb') return 'cling';
   if (activity === 'play') return place === 'swing' ? 'swing' : place === 'pond' ? 'splash' : 'ball';
+  if (activity === 'build') return 'build';
   return 'idle';
+}
+
+// New land is reached only over its bridge, which runs straight from the island toward the
+// land's centre. Returns the waypoints to walk through (none when no bridge is crossed).
+export const BRIDGE_IN = 2.5; // the island end of a bridge, this far in from the island's edge
+export const bridgeEnds = (land, island = 24) => {
+  const d = Math.hypot(land.x, land.z);
+  const ux = land.x / d;
+  const uz = land.z / d;
+  return {
+    island: { x: ux * (island - BRIDGE_IN), z: uz * (island - BRIDGE_IN), y: 0 },
+    land: { x: land.x - ux * (land.r - 1.2), z: land.z - uz * (land.r - 1.2), y: 0 },
+  };
+};
+
+export function landRoute(from, to, lands, island = 24) {
+  const on = (p) => lands.find((l) => Math.hypot(p.x - l.x, p.z - l.z) < l.r + 0.5) ?? null;
+  const a = on(from);
+  const b = on(to);
+  if (a === b) return [];
+  const out = [];
+  if (a) {
+    const e = bridgeEnds(a, island);
+    out.push(e.land, e.island);
+  }
+  if (b) {
+    const e = bridgeEnds(b, island);
+    out.push(e.island, e.land);
+  }
+  return out;
 }
 
 export function fmtUsd(v) {

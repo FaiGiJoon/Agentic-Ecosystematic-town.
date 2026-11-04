@@ -29,6 +29,13 @@ function invent() {
     { action: 'climb', target: pick(['big_gum', 'blue_gum', 'river_gum']), say: '', mood: 'content' },
     { action: 'sit', target: '', say: pick(['The wind smells like rain.', '', 'Hmm.']), mood: 'cozy' },
   ];
+  if (/You can build/.test(prompt)) {
+    const underway = /Being built: (?!nothing)/.test(prompt);
+    const names = ['Sky Nest', 'Cozy Corner', 'Moon Perch', 'Gumnut Lodge', 'Pebble Path', 'Snack Shack', 'Glow Post'];
+    const build = () => ({ action: 'build', target: pick(['bench', 'lantern', 'flowerbed', 'birdhouse', 'stones', 'hut', 'treehouse', 'tower']), build_name: pick(names), say: pick(['Let us build something!', 'I have an idea!', '']), mood: 'curious' });
+    const keepGoing = () => ({ action: 'build', target: '', build_name: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
+    options.push(build(), underway ? keepGoing() : build(), underway ? keepGoing() : build());
+  }
   if (hungry) options.push({ action: 'eat', target: pick(['big_gum', 'river_gum', 'blue_gum']), say: 'Munch munch.', mood: 'hungry' });
   if (tired) options.push({ action: 'nap', target: '', say: 'Just a little nap...', mood: 'sleepy' });
   if (heard) options.push({ action: 'sit', target: '', say: pick(['I heard you!', 'Yes, I think so too.', 'Really? Tell me more.']), mood: 'happy' });

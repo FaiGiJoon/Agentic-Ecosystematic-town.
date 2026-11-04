@@ -8,7 +8,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, skyAt } from './view.js';
+import { spotFor, animFor, skyAt, landRoute } from './view.js';
+import { BuildLayer } from './gfx/builds.js';
 import { buildTextures } from './gfx/textures.js';
 import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
@@ -50,7 +51,7 @@ function readPref() {
 }
 
 export class GroveScene {
-  constructor(container, { places, koalas }) {
+  constructor(container, { places, koalas, plots = [] }) {
     const t0 = performance.now();
     let lapAt = t0;
     this.timings = {};
@@ -106,10 +107,12 @@ export class GroveScene {
 
     this.tex = buildTextures({ size: S.texSize, maxAniso: r.capabilities.getMaxAnisotropy() });
     lap('textures');
-    this.terrain = makeTerrain(places);
+    // build plots stay clear of trees and rocks, so what the koalas build has room
+    this.terrain = makeTerrain(places, { clear: plots.filter((p) => !p.land) });
     this.terrain.pond = places.pond;
     const T = this.terrain;
-    this.groundY = (x, z) => T.height(x, z);
+    // new land and its bridges first, then the island itself
+    this.groundY = (x, z) => this.buildLayer?.heightAt(x, z) ?? T.height(x, z);
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0xbfd0e0, 0.0068);
@@ -129,6 +132,7 @@ export class GroveScene {
     this.sky = new Sky({ scene: this.scene, renderer: r, settings: S });
     lap('sky');
     this.#world(rand, S, lap);
+    this.buildLayer = new BuildLayer({ scene: this.scene, tex: this.tex, baseY: (x, z) => T.height(x, z), island: ISLAND });
     this.#buildKoalas(koalas);
     lap('koalas');
     this.#effects(S);
@@ -645,9 +649,19 @@ export class GroveScene {
     return [{ x: c.x + nx * (R + 1.3), z: c.z + nz * (R + 1.3), y: 0 }];
   }
 
+  // The way to walk: over a bridge when it leads to or from new land, and around the pond.
+  walk(from, to) {
+    const lands = (this.state?.lands ?? []).filter((l) => l.risen);
+    const over = landRoute(from, to, lands, ISLAND);
+    if (!over.length) return this.route(from, to);
+    return [...this.route(from, over[0]), ...over, ...this.route(over.at(-1), to)];
+  }
+
   sync(state) {
     const prev = this.state;
     this.state = state;
+    this.places = state.places;
+    this.buildLayer.sync(state);
     this.clockFrac = state.clock.frac;
     this.clockDay = state.clock.day;
     this.clockAt = performance.now();
@@ -660,9 +674,9 @@ export class GroveScene {
       view.thinking = k.thinking;
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       const anim = animFor(k);
-      view.setGoal(spot, anim, this.route(view.pos, spot), this.#faceFor(k, spot));
+      view.setGoal(spot, anim, this.walk(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
-      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb' }[anim] ?? 'sit'}`);
+      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
   }
@@ -674,10 +688,19 @@ export class GroveScene {
     if (p.tree && (k.activity === 'climb' || k.activity === 'eat')) return toward(p.x, p.z);
     if (k.place === 'pond') return toward(p.x, p.z);
     if (k.place === 'swing' && k.activity === 'play') return 0;
+    if (p.build && k.activity === 'build') return toward(p.x, p.z);
     return null;
   }
 
   onLog(e) {
+    if (e.kind === 'built' || e.kind === 'land') {
+      const p = this.places[e.target];
+      if (p) {
+        const y = this.groundY(p.x, p.z);
+        this.fx.sparkle(p.x, y + 1.2, p.z, 40, e.kind === 'land' ? [0.7, 1, 0.8] : [1, 0.9, 0.5]);
+        this.fx.hearts(p.x, y + 2, p.z, 4);
+      }
+    }
     const view = this.koalas.get(e.koala);
     if (!view) return;
     if (e.kind === 'say') view.say(e.text);
@@ -751,6 +774,7 @@ export class GroveScene {
     this.#visitor_(dt, t);
     this.#koalas_(dt, t);
     this.#toys(dt, t);
+    this.buildLayer.update(dt, t, this.night ?? 0);
     this.#life(dt, t);
     this.#camera(dt);
     if (!this.freeCam && this.cam === 'third') this.controls.update();
@@ -856,7 +880,11 @@ export class GroveScene {
     }
     // Stay on the island, out of the pond and out of the tree trunks.
     const r = Math.hypot(p.x, p.z);
-    if (r > ISLAND - 1) {
+    const offIsland = this.buildLayer.heightAt(p.x, p.z) == null;
+    if (offIsland && this.buildLayer.heightAt(before.x, before.z) != null) {
+      p.x = before.x; // the edge of new land or a bridge: stay on it
+      p.z = before.z;
+    } else if (r > ISLAND - 1 && offIsland) {
       p.x *= (ISLAND - 1) / r;
       p.z *= (ISLAND - 1) / r;
     }

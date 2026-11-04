@@ -12,7 +12,7 @@ let ui = null;
 let lastLogId = 0;
 
 function boot(state) {
-  scene = new GroveScene(document.getElementById('stage'), { places: state.places, koalas: state.koalas });
+  scene = new GroveScene(document.getElementById('stage'), { places: state.places, koalas: state.koalas, plots: state.plots });
   ui = createUI({ scene, api: groveApi });
   // Old lines are history, not news: no bubbles for them.
   lastLogId = state.log.at(-1)?.id ?? 0;

@@ -10,9 +10,9 @@ const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></
 const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
-  approach: 'keeping company', give: 'sharing', sit: 'sitting',
+  approach: 'keeping company', give: 'sharing', build: 'building', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -288,6 +288,32 @@ export function createUI({ scene, api }) {
     });
   }
 
+  // What the koalas are building, what stands, and when the next land rises.
+  function drawBuilds() {
+    const builds = state.builds ?? [];
+    const open = builds.filter((b) => !b.done);
+    const done = builds.filter((b) => b.done);
+    const risen = (state.lands ?? []).filter((l) => l.risen);
+    const next = (state.lands ?? []).find((l) => !l.risen);
+    const who = (b) => b.helpers.map(name).join(' and ');
+    const card = (b) => `
+      <div class="bcard${b.done ? ' done' : ''}">
+        <div class="bhead"><b>${esc(b.title)}</b><span>${esc(state.blueprints?.[b.kind]?.name ?? b.kind)}</span></div>
+        ${b.done ? '' : `<div class="bar"><i style="width:${Math.round((b.progress / b.effort) * 100)}%;background:var(--warm)"></i></div>`}
+        <div class="bmeta">${b.done ? 'Built' : `${b.progress} of ${b.effort} steps`} by ${esc(who(b))}, at the ${esc(state.places[b.plot]?.name ?? b.plot)}</div>
+      </div>`;
+    const toNext = next ? 2 - (done.length % 2) : 0;
+    $('#tab-builds').innerHTML = `
+      <p class="empty">The koalas decide for themselves what to build and what to call it. Building together goes twice as fast.</p>
+      <h3>Going up</h3>
+      ${open.length ? open.map(card).join('') : '<p class="empty">Nothing is being built right now.</p>'}
+      <h3>Built (${done.length})</h3>
+      ${done.length ? done.map(card).join('') : '<p class="empty">Nothing yet. Their first build will appear here and in the grove.</p>'}
+      <h3>The grove</h3>
+      <p class="lastcall">${risen.length ? `New land so far: ${risen.map((l) => esc(l.name)).join(', ')}.` : 'Just the island for now.'}
+        ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>`;
+  }
+
   function drawTalk() {
     const body = $('#tab-talk');
     const atEnd = body.scrollTop + body.clientHeight >= body.scrollHeight - 30;
@@ -378,6 +404,7 @@ export function createUI({ scene, api }) {
     drawChips();
     if (tab === 'koalas') drawKoalas();
     if (tab === 'talk') drawTalk();
+    if (tab === 'builds') drawBuilds();
     if (tab === 'meter') drawMeter();
     drawInspector();
   }

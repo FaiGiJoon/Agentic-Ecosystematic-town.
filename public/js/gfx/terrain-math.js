@@ -12,8 +12,11 @@ export const SHORE_R = POND_R + 0.5;
 
 // Places that are not trees keep a clear patch of lawn; trees keep a wider one.
 const CLEAR = 1.7;
+// A build plot keeps this much room around it.
+const PLOT_CLEAR = 2.8;
 
-export function makeTerrain(places) {
+// clear: extra spots (the build plots) where nothing big may stand, without a path to them.
+export function makeTerrain(places, { clear = [] } = {}) {
   const pond = places.pond;
   const look = places.lookout;
   const c = places.clearing;
@@ -73,6 +76,7 @@ export function makeTerrain(places) {
       const r = (q.tree ? 3.2 : CLEAR) + pad;
       if (Math.hypot(x - q.x, z - q.z) < r) return true;
     }
+    for (const q of clear) if (Math.hypot(x - q.x, z - q.z) < PLOT_CLEAR + pad) return true;
     return false;
   }
 

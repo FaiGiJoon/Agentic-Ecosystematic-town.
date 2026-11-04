@@ -31,6 +31,7 @@
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.500A8 8 0 019.500 4 8 8 0 1020 14.500z" fill="currentColor"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.200" fill="currentColor"/><path d="M12 2.500v2.200M12 19.300v2.200M2.500 12h2.200M19.300 12h2.200M5.300 5.300l1.500 1.500M17.200 17.200l1.500 1.500M5.300 18.700l1.500-1.500M17.200 6.800l1.500-1.500"/></g></symbol>
       <symbol id="i-climb" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6M6 20l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-build" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.500 10.500L5 19"/><path d="M11 6.500l3-3 6.500 6.500-3 3z"/></g></symbol>
       <symbol id="i-sit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500" fill="currentColor"/></symbol>
       <symbol id="i-walk" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.500" r="1.800"/><path d="M9 21l2.500-6.500L9 12l1.500-4.500 3-1 3 3.500M11.500 14.500l3 1.800.8 4.200M10.500 7.500L7.500 10"/></g></symbol>
       <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/></g></symbol>
@@ -84,12 +85,14 @@
   <aside id="panel">
     <nav class="tabs" id="tabs">
       <button data-tab="koalas" class="on" type="button">Koalas</button>
+      <button data-tab="builds" type="button">Builds</button>
       <button data-tab="talk" type="button">Talk</button>
       <button data-tab="meter" type="button">Meter</button>
     </nav>
     <p id="status-line" class="status-line"></p>
     <section class="tab-body" id="tab-koalas"></section>
     <section class="tab-body" id="tab-talk" hidden></section>
+    <section class="tab-body" id="tab-builds" hidden></section>
     <section class="tab-body" id="tab-meter" hidden></section>
     <button id="panel-toggle" type="button" title="Toggle panel">⟩</button>
   </aside>

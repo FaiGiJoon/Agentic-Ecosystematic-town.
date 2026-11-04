@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, PLACES, newKoala, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 
@@ -87,12 +87,14 @@ export class Grove {
       setMeta: p('INSERT INTO grove_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
     };
 
-    this.world = { koalas: {} };
+    // The koalas' world: themselves, and what they have built together.
+    this.world = { koalas: {}, builds: [] };
     for (const k of KOALAS) {
       const row = this.q.koala.get(k.id);
       this.world.koalas[k.id] = row ? { ...newKoala(k.id), ...JSON.parse(row.data) } : newKoala(k.id);
       this.#run[k.id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
     }
+    this.world.builds = this.#meta('builds', []);
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
     if (this.playing) this.#schedule();
   }
@@ -219,7 +221,7 @@ export class Grove {
   #finish(id, out) {
     const r = this.#run[id];
     const u = out.usage;
-    const decision = out.ok ? parseDecision(out.raw, this.world.koalas[id]) : null;
+    const decision = out.ok ? parseDecision(out.raw, this.world.koalas[id], placesOf(this.world)) : null;
     if (u) this.q.usage.run(this.now(), id, decision ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms);
     if (!decision) {
       const why = out.ok ? 'Reply was not a decision' : out.error;
@@ -234,6 +236,7 @@ export class Grove {
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
     for (const other of KOALAS) this.#save(other.id);
+    this.#setMeta('builds', this.world.builds);
     const friend = KOALAS.find((x) => x.id !== id).id;
     if (decision.say || decision.action === 'give' || decision.action === 'approach') this.#nudge(friend);
     let next = this.now() + this.#between(this.config.minMs, this.config.maxMs);
@@ -362,8 +365,12 @@ export class Grove {
       present: this.present,
       capped: today.total.cost >= this.config.dayUsd,
       clock: this.clock(),
-      places: PLACES,
+      places: placesOf(this.world),
       items: ITEMS,
+      builds: this.world.builds,
+      blueprints: BLUEPRINTS,
+      plots: PLOTS,
+      lands: LANDS.map((l) => ({ ...l, risen: landOf(this.world).includes(l) })),
       koalas: KOALAS.map((k) => ({
         ...this.world.koalas[k.id],
         ...growthOf(this.world.koalas[k.id]),
