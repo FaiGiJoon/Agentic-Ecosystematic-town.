@@ -90,3 +90,15 @@ test('nesting through decisions: one waits for the other, then a baby is on the 
   assert.equal(young.koalas.crystal.activity, 'sit');
   assert.match(young.koalas.crystal.recent.join(' '), /wanted to make a nest/);
 });
+
+test('a baby inherits two interests from each parent, deduped', () => {
+  const w = lovers();
+  w.baby = { due: 10, parents: ['crystal', 'ruby'] };
+  const k = bornBaby(w, 10, 'Pip', 'pip');
+  assert.deepEqual(k.interests, ['brave explorers', 'shiny stones and crystals', 'sleepy animals', 'eucalyptus and plants']);
+  const w2 = lovers();
+  w2.koalas.crystal.interests = ['stars', 'poems'];
+  w2.koalas.ruby.interests = ['poems', 'moon', 'plants'];
+  w2.baby = { due: 10, parents: ['crystal', 'ruby'] };
+  assert.deepEqual(bornBaby(w2, 10, 'Pip', 'pip').interests, ['stars', 'poems', 'moon']);
+});

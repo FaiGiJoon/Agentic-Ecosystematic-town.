@@ -338,3 +338,35 @@ test('read: costs energy like play, is described, and the prompt offers it and l
   w.koalas.ruby.place = 'pond';
   assert.doesNotMatch(buildPrompt(w, 'ruby', { label: 'x', phase: 'y' }), /read \(target/);
 });
+
+test('founders have their own interests; the system prompt names them and the wish field', () => {
+  const crystal = KOALAS.find((k) => k.id === 'crystal');
+  const ruby = KOALAS.find((k) => k.id === 'ruby');
+  assert.deepEqual(crystal.interests, ['brave explorers', 'shiny stones and crystals', 'stars', 'faraway places']);
+  assert.deepEqual(ruby.interests, ['sleepy animals', 'eucalyptus and plants', 'poems', 'the moon and night']);
+  const sys = systemPrompt('crystal', world());
+  assert.match(sys, /You have your own mind and your own life\. You are curious about: brave explorers, shiny stones and crystals, stars, faraway places\./);
+  assert.match(sys, /Follow your curiosity: visit the library to read or look things up, then talk about what you learned and let it inspire what you build\./);
+  assert.match(sys, /wish/);
+  const w = world();
+  w.koalas.pip = { ...newKoala('crystal'), id: 'pip', name: 'Pip', gender: 'girl', persona: 'Pip is small.', interests: ['frogs', 'mud'], parents: ['crystal', 'ruby'] };
+  assert.match(systemPrompt('pip', w), /curious about: frogs, mud\./);
+});
+
+test('wish is a required schema field, stored when non-empty, kept when empty, and shown in the prompt', () => {
+  assert.ok(DECISION_SCHEMA.required.includes('wish'));
+  assert.equal(DECISION_SCHEMA.properties.wish.type, 'string');
+  const w = world();
+  const m = w.koalas.crystal;
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /You have no wish yet\./);
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: 'Build a tower to touch the stars' }, m));
+  assert.equal(m.wish, 'Build a tower to touch the stars');
+  assert.ok(log.some((e) => e.kind === 'wish' && e.text === 'Crystal wishes: Build a tower to touch the stars'));
+  assert.equal(log[0].kind, 'act');
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /Your wish: "Build a tower to touch the stars"/);
+  const same = applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: 'Build a tower to touch the stars' }, m));
+  assert.ok(!same.some((e) => e.kind === 'wish'));
+  applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: '' }, m));
+  assert.equal(m.wish, 'Build a tower to touch the stars');
+  assert.equal(parseDecision({ action: 'sit', wish: 'x'.repeat(300) }, m).wish.length, 120);
+});

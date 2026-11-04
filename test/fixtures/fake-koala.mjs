@@ -60,6 +60,7 @@ function invent() {
     remember: Math.random() < 0.2 ? `A ${pick(['quiet', 'sunny', 'funny'])} moment at the grove.` : '',
     bond: pick([0, 0, 1, 1, 2, -1]),
     opinion: Math.random() < 0.3 ? pick(['A good friend.', 'A bit noisy, but kind.', 'I like having them around.']) : '',
+    wish: Math.random() < 0.15 ? pick(['Build a tower to touch the stars.', 'Find a frog and make friends.', 'Write a poem about the moon.']) : '',
     ...d,
   };
 }

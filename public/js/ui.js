@@ -12,7 +12,7 @@ const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
   approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow', wish: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -310,6 +310,10 @@ export function createUI({ scene, api }) {
         <div class="holds">${growthLine(k)}</div>
         <div class="opinion">${k.opinion ? `On ${esc(friend(k).name)}: “${esc(k.opinion)}”` : `No opinion of ${esc(friend(k).name)} yet.`}</div>
         <div class="holds">Holding: ${k.inventory.length ? k.inventory.map(esc).join(', ') : 'nothing'}</div>
+        <div class="holds">${k.wish ? `Wish: “${esc(k.wish)}”` : 'No wish yet.'}</div>
+        <details><summary>Learned (${(k.learned ?? []).length})</summary>
+          <ul>${(k.learned ?? []).map((m) => `<li>${esc(m)}</li>`).join('') || '<li class="muted">Nothing yet. Koalas learn at the library.</li>'}</ul>
+        </details>
         <details ${k.memories.length ? 'open' : ''}><summary>Remembers (${k.memories.length})</summary>
           <ul>${k.memories.map((m) => `<li>${esc(m)}</li>`).join('') || '<li class="muted">Nothing yet. Memories form as the koalas live.</li>'}</ul>
         </details>

@@ -10,6 +10,7 @@ export const KOALAS = [
     outfit: 'a pink scarf',
     color: '#b9c2c9',
     home: 'clearing',
+    interests: ['brave explorers', 'shiny stones and crystals', 'stars', 'faraway places'],
     persona: 'Crystal is a bold and endlessly curious baby koala, a girl (she/her) who wears a pink scarf. '
       + 'Crystal loves exploring every corner of the grove, collects shiny pebbles, splashes at the pond, '
       + 'talks a lot, gets bored quickly and sometimes teases. Crystal secretly wants Ruby to think she is brave.',
@@ -21,6 +22,7 @@ export const KOALAS = [
     outfit: 'a small blue hat',
     color: '#8d8478',
     home: 'hollow',
+    interests: ['sleepy animals', 'eucalyptus and plants', 'poems', 'the moon and night'],
     persona: 'Ruby is a gentle and sleepy baby koala, a boy (he/him) who wears a small blue hat. Ruby adores '
       + 'eucalyptus, long naps in the mossy hollow and quiet company. He speaks softly and a little poetically, '
       + 'is slow to trust, notices small things, and is protective of friends once they have earned it.',
@@ -131,12 +133,14 @@ export const DECISION_SCHEMA = {
     bond: { type: 'integer', minimum: -3, maximum: 3, description: 'How this moment changes your feelings about your friend.' },
     opinion: { type: 'string', description: 'One line: what you think of your friend now, or empty to keep it.' },
     build_name: { type: 'string', description: 'When you start building something, a name for it; otherwise empty.' },
+    wish: { type: 'string', description: 'Something you would love to do or make one day, or empty to keep your wish.' },
   },
-  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name'],
+  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish'],
   additionalProperties: false,
 };
 
 const byId = (id) => KOALAS.find((k) => k.id === id);
+export const interestsOf = (k) => k?.interests ?? byId(k?.id)?.interests ?? [];
 export const MAX_KOALAS = 4;
 
 // Everyone else in the grove.
@@ -307,6 +311,7 @@ export function parseDecision(raw, koala, places = PLACES) {
     bond,
     opinion: text(obj.opinion, 120),
     buildName: text(obj.build_name, 40),
+    wish: text(obj.wish, 120),
     note,
   };
 }
@@ -461,6 +466,8 @@ export function applyDecision(world, id, d) {
   k.bond = clamp(k.bond + d.bond * 4, -100, 100);
   if (d.opinion) k.opinion = d.opinion;
   if (d.remember) push(k.memories, d.remember, MAX_MEMORIES);
+  const newWish = d.wish && d.wish !== k.wish ? d.wish : '';
+  if (newWish) k.wish = newWish;
 
   const did = step ? describeBuild(step)
     : d.action === 'gather' ? `gathered ${d.target} at the ${places[k.place]?.name ?? k.place}`
@@ -477,6 +484,7 @@ export function applyDecision(world, id, d) {
     tell(`${k.name} said: "${d.say}"`);
     log.push({ koala: id, kind: 'say', text: d.say });
   }
+  if (newWish) log.push({ koala: id, kind: 'wish', text: `${k.name} wishes: ${newWish}` });
   if (step?.b.done) {
     const t = step.b.title;
     push(k.recent, `You finished the ${t}! It stands at ${siteOf(step.b)} now.`, MAX_RECENT);
@@ -531,11 +539,13 @@ export function systemPrompt(id, world = null) {
   return [
     `You are ${k.name}, a koala living in a small eucalyptus grove with ${f.name}, a ${f.gender} (${PRONOUNS[f.gender] ?? 'they/them'})${family.length ? `, and your family: ${family.join(', ')}` : ''}.`,
     k.persona,
+    `You have your own mind and your own life. You are curious about: ${interestsOf(k).join(', ') || 'everything'}.`,
+    'Follow your curiosity: visit the library to read or look things up, then talk about what you learned and let it inspire what you build.',
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
     'A human visitor sometimes walks around the grove, gives you things or talks to you.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
-    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty).',
+    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
   ].join('\n');
 }
@@ -586,6 +596,8 @@ export function buildPrompt(world, id, clock) {
     '',
     'Things you remember:',
     ...(k.memories.length ? k.memories.slice(-PROMPT_MEMORIES).map((m) => `- ${m}`) : ['- nothing yet']),
+    '',
+    k.wish ? `Your wish: "${k.wish}"` : 'You have no wish yet.',
     '',
     'Things you learned:',
     ...((k.learned ?? []).length ? k.learned.slice(-5).map((m) => `- ${m}`) : ['- nothing yet']),

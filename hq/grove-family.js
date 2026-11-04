@@ -2,7 +2,7 @@
 // grove day later, follows its mother everywhere for free, and once it is strong enough it
 // starts making its own (real model) decisions. Pure, like grove-world.js.
 
-import { KOALAS, MAX_KOALAS, START_STRENGTH, stageOf } from './grove-world.js';
+import { KOALAS, MAX_KOALAS, START_STRENGTH, stageOf, interestsOf } from './grove-world.js';
 
 export const NEST_WINDOW = 120; // grove minutes: both must choose to nest within this
 export const GESTATION = 1440; // grove minutes: one grove day
@@ -54,6 +54,9 @@ export function babyPersona(world, parents, name, gender) {
     + `looks up to both parents, and is still learning how everything in the grove works.`;
 }
 
+// Two interests from each parent, no repeats.
+export const babyInterests = (world, parents) => [...new Set(parents.flatMap((p) => interestsOf(world.koalas[p]).slice(0, 2)))];
+
 // The baby, if it is due at grove minute `now`: it joins world.koalas and is returned.
 export function bornBaby(world, now, name, id, gender = 'girl') {
   if (!world.baby || now < world.baby.due) return null;
@@ -63,6 +66,7 @@ export function bornBaby(world, now, name, id, gender = 'girl') {
     name,
     gender,
     persona: babyPersona(world, parents, name, gender),
+    interests: babyInterests(world, parents),
     color: '#b3aca3',
     place: 'hollow',
     activity: 'sit',
