@@ -12,7 +12,7 @@ const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
   approach: 'keeping company', give: 'sharing', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -221,6 +221,9 @@ export function createUI({ scene, api }) {
     return `<div class="bond"><i style="left:${left}%;width:${w}%;background:${v < 0 ? 'var(--red)' : 'var(--mint)'}"></i><b></b></div>`;
   }
   const where = (k) => state.places[k.place]?.name ?? k.place;
+  // "Baby, strength 5 of 100. Next: joey at 20. Climbs a third of a tree, holds 2." in a few words.
+  const growthLine = (k) => `${esc(k.stageLabel)}, strength ${Math.round(k.strength)}/100${k.nextStage ? `, ${esc(k.nextStage.label.toLowerCase())} at ${k.nextStage.at}` : ', fully grown'}. `
+    + `Climbs ${Math.round(k.reach * 100)}% of a tree, holds ${k.carry}.`;
   function nextIn(k) {
     if (k.thinking) return 'thinking now';
     if (!state.playing || state.capped || k.nextAt == null) return 'resting';
@@ -233,7 +236,7 @@ export function createUI({ scene, api }) {
     $('#tab-koalas').innerHTML = state.koalas.map((k) => `
       <article class="kcard" style="--c:${k.color}" data-id="${esc(k.id)}">
         <div class="khead">
-          <span class="dot"></span><b>${esc(k.name)}</b><span class="mood">${esc(k.mood)}</span>
+          <span class="dot"></span><b>${esc(k.name)}</b><span class="stage">${esc(k.stageLabel)}</span><span class="mood">${esc(k.mood)}</span>
           <span class="next" data-next="${esc(k.id)}">${esc(nextIn(k))}</span>
         </div>
         <div class="doing">${esc(DOING[k.activity] ?? k.activity)} at the ${esc(where(k))}</div>
@@ -241,8 +244,10 @@ export function createUI({ scene, api }) {
         <div class="needs2">
           <label>Hunger</label>${bar(k.hunger, 'var(--orange)')}
           <label>Energy</label>${bar(k.energy, 'var(--mint)')}
+          <label>Strength</label>${bar(k.strength, 'var(--gold)')}
           <label>Bond</label>${bondBar(k.bond)}
         </div>
+        <div class="holds">${growthLine(k)}</div>
         <div class="opinion">${k.opinion ? `On ${esc(friend(k).name)}: “${esc(k.opinion)}”` : `No opinion of ${esc(friend(k).name)} yet.`}</div>
         <div class="holds">Holding: ${k.inventory.length ? k.inventory.map(esc).join(', ') : 'nothing'}</div>
         <details ${k.memories.length ? 'open' : ''}><summary>Remembers (${k.memories.length})</summary>
@@ -316,8 +321,8 @@ export function createUI({ scene, api }) {
     const said = insp.querySelector('.said');
     said.textContent = k.say ? `Last said: “${k.say}”` : '';
     said.hidden = !k.say;
-    insp.querySelector('.needs').innerHTML = `<label>Hunger</label>${bar(k.hunger, 'var(--orange)')}<label>Energy</label>${bar(k.energy, 'var(--mint)')}`;
-    const full = k.inventory.length >= 4;
+    insp.querySelector('.needs').innerHTML = `<label>Hunger</label>${bar(k.hunger, 'var(--orange)')}<label>Energy</label>${bar(k.energy, 'var(--mint)')}<label>Strength</label>${bar(k.strength, 'var(--gold)')}`;
+    const full = k.inventory.length >= (k.carry ?? 4);
     for (const b of give.children) b.disabled = full;
     give.title = full ? `${k.name}'s paws are full` : '';
   }

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, MAX_ITEMS, PLACES, newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt,
+  KOALAS, ITEMS, PLACES, newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 
@@ -278,7 +278,7 @@ export class Grove {
     if (!k || !Object.hasOwn(this.world.koalas, koala)) throw new GroveError(404, 'no such koala');
     if (kind === 'give') {
       if (!ITEMS.includes(item)) throw new GroveError(400, `item must be one of: ${ITEMS.join(', ')}`);
-      if (k.inventory.length >= MAX_ITEMS) throw new GroveError(409, `${k.name}'s paws are full`);
+      if (k.inventory.length >= carryLimit(k.strength)) throw new GroveError(409, `${k.name}'s paws are full`);
       k.inventory.push(item);
       k.recent.push(`The visitor gave you a ${item}.`);
       this.#log({ koala, kind: 'visitor', text: `You gave ${k.name} a ${item}`, action: 'give', target: item });
@@ -342,6 +342,7 @@ export class Grove {
       items: ITEMS,
       koalas: KOALAS.map((k) => ({
         ...this.world.koalas[k.id],
+        ...growthOf(this.world.koalas[k.id]),
         color: k.color,
         thinking: this.#run[k.id].thinking,
         nextAt: this.#run[k.id].nextAt === Infinity ? null : this.#run[k.id].nextAt,

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   KOALAS, PLACES, ITEMS, ACTIONS, MOODS, DECISION_SCHEMA,
   newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt,
+  growthOf, carryLimit, STAGES, START_STRENGTH,
 } from '../hq/grove-world.js';
 
 const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])) });
@@ -151,4 +152,102 @@ test('the prompt carries needs, the friend, memories and the place ids', () => {
   // Memories are for what is new; otherwise every turn re-saves the same moment.
   assert.match(systemPrompt('bramble'), /Leave remember empty unless/);
   assert.match(buildPrompt(w, 'mallee', groveClock(0)), /Things you remember/);
+});
+
+test('Mallee is a girl and Bramble a boy, both told so in their prompts', () => {
+  assert.deepEqual(KOALAS.map((k) => [k.id, k.gender]), [['mallee', 'girl'], ['bramble', 'boy']]);
+  assert.match(systemPrompt('mallee'), /Bramble, a boy \(he\/him\)/);
+  assert.match(systemPrompt('bramble'), /Mallee, a girl \(she\/her\)/);
+  assert.match(KOALAS[0].persona, /pink scarf/);
+  assert.match(KOALAS[1].persona, /small blue hat/);
+});
+
+test('both koalas start as small, weak babies', () => {
+  for (const k of KOALAS) {
+    const n = newKoala(k.id);
+    const g = growthOf(n);
+    assert.equal(n.strength, START_STRENGTH);
+    assert.equal(g.stage, 'baby');
+    assert.ok(g.size < 0.6, `size ${g.size}`);
+    assert.equal(g.carry, 2);
+    assert.ok(g.reach < 0.4, `reach ${g.reach}`);
+    assert.match(buildPrompt(world(), k.id, groveClock(0)), /You are a baby, strength 5 of 100 \(a joey at 20\)/);
+  }
+});
+
+test('growth: size, carrying and climbing reach rise with strength and top out at fully grown', () => {
+  let last = { size: 0, carry: 0, reach: 0 };
+  for (const s of [0, 20, 45, 75, 100]) {
+    const k = { ...newKoala('mallee'), strength: s };
+    const g = growthOf(k);
+    assert.ok(g.size > last.size || s === 0, `size at ${s}`);
+    assert.ok(g.carry >= last.carry && g.reach >= last.reach);
+    last = g;
+  }
+  assert.equal(last.size, 1);
+  assert.equal(last.carry, 4);
+  assert.equal(last.reach, 1);
+  assert.equal(last.nextStage, null);
+  assert.equal(last.stage, 'grown');
+  assert.deepEqual(STAGES.map((s) => s.id), ['baby', 'joey', 'youngster', 'grown']);
+});
+
+test('climbing, playing, eating and napping make a koala stronger; sitting does not', () => {
+  const w = world();
+  const m = w.koalas.mallee;
+  const run = (d) => applyDecision(w, 'mallee', parseDecision(d, m));
+  const gained = (d) => {
+    const before = m.strength;
+    run(d);
+    return m.strength - before;
+  };
+  assert.equal(gained({ action: 'sit' }), 0);
+  const climb = gained({ action: 'climb', target: 'big_gum' });
+  const play = gained({ action: 'play', target: 'ball' });
+  const eat = gained({ action: 'eat', target: 'big_gum' });
+  const nap = gained({ action: 'nap' });
+  assert.ok(climb > play && play > eat && eat > nap && nap > 0, [climb, play, eat, nap].join(' '));
+  m.strength = 100;
+  assert.equal(gained({ action: 'climb', target: 'big_gum' }), 0, 'capped at 100');
+});
+
+test('a stage change is logged and remembered, once', () => {
+  const w = world();
+  const m = w.koalas.mallee;
+  m.strength = 19.5;
+  const log = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'big_gum' }, m));
+  assert.equal(growthOf(m).stage, 'joey');
+  const grew = log.filter((e) => e.kind === 'grow');
+  assert.equal(grew.length, 1);
+  assert.equal(grew[0].text, 'Mallee grew into a joey!');
+  assert.match(m.recent.at(-1), /You feel stronger. You are a joey now!/);
+  assert.match(w.koalas.bramble.recent.at(-1), /Mallee has grown into a joey/);
+  const again = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'big_gum' }, m));
+  assert.equal(again.filter((e) => e.kind === 'grow').length, 0);
+});
+
+test('babies tire faster than grown koalas and scramble instead of climbing', () => {
+  const w = world();
+  const baby = w.koalas.mallee;
+  const grown = w.koalas.bramble;
+  grown.strength = 100;
+  baby.energy = grown.energy = 80;
+  applyDecision(w, 'mallee', parseDecision({ action: 'play', target: 'ball' }, baby));
+  applyDecision(w, 'bramble', parseDecision({ action: 'play', target: 'ball' }, grown));
+  assert.ok(80 - baby.energy > 80 - grown.energy, `${baby.energy} vs ${grown.energy}`);
+  const log = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'river_gum' }, baby));
+  assert.match(log[0].text, /scrambled a little way up the River Gum/);
+  const big = applyDecision(w, 'bramble', parseDecision({ action: 'climb', target: 'river_gum' }, grown));
+  assert.match(big[0].text, /climbed the River Gum/);
+});
+
+test('a baby cannot be handed more than it can carry', () => {
+  const w = world();
+  const m = w.koalas.mallee;
+  const b = w.koalas.bramble;
+  m.inventory = ['leaf'];
+  b.inventory = ['pebble', 'ball'];
+  applyDecision(w, 'mallee', parseDecision({ action: 'give', target: 'leaf' }, m));
+  assert.deepEqual(b.inventory, ['pebble', 'ball'], 'paws full: the leaf stays out');
+  assert.equal(carryLimit(70), 4);
 });

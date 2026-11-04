@@ -16,6 +16,9 @@ test('climbing and eating put the koala up in the tree', () => {
   assert.ok(spotFor(PLACES, 'big_gum', 'mallee', 'climb').y > 2);
   assert.ok(spotFor(PLACES, 'big_gum', 'mallee', 'eat').y > 2);
   assert.equal(spotFor(PLACES, 'big_gum', 'mallee', 'sit').y, 0);
+  // a baby only gets part of the way up the trunk
+  const low = spotFor(PLACES, 'big_gum', 'mallee', 'climb', 0.35).y;
+  assert.ok(low > 0.5 && low < spotFor(PLACES, 'big_gum', 'mallee', 'climb').y / 2, `y ${low}`);
   assert.deepEqual(spotFor(PLACES, 'nowhere', 'mallee', 'sit'), { x: 0, z: 0, y: 0 });
 });
 

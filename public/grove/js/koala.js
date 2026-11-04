@@ -52,6 +52,10 @@ export class Koala {
     this.lastW = 0;
     this.furMats = [];
     this.furMeshes = [];
+    // Both start as babies: the server says how big (0.5 to 1) and the model grows to it.
+    this.size = 1;
+    this.sizeGoal = 1;
+    this.sized = false;
 
     const root = (this.root = new THREE.Group());
     const rig = (this.rig = new THREE.Group());
@@ -132,14 +136,17 @@ export class Koala {
     mouth.position.set(0, -0.19, 0.55);
     head.add(mouth);
 
-    // Mallee wears a woven orange scarf; Bramble a gum leaf tucked behind one ear.
+    // Mallee (a girl) wears a woven pink scarf; Bramble (a boy) a small blue knitted hat.
     if (id === 'mallee') {
       const cloth = tex ? tex.cloth.clone() : null;
       if (cloth) {
         cloth.repeat.set(7, 1);
         cloth.needsUpdate = true;
       }
-      const scarfMat = new THREE.MeshStandardMaterial({ color: '#e8873a', roughness: 0.85, normalMap: cloth, normalScale: new THREE.Vector2(0.9, 0.9) });
+      // the scarf widens on a baby, whose big head would otherwise swallow it
+      const wrap = (this.scarf = new THREE.Group());
+      rig.add(wrap);
+      const scarfMat = new THREE.MeshStandardMaterial({ color: '#f26fa6', roughness: 0.85, normalMap: cloth, normalScale: new THREE.Vector2(0.9, 0.9) });
       const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 14, 32), scarfMat);
       scarf.rotation.x = Math.PI / 2;
       scarf.position.set(0, 1.04, 0.04);
@@ -154,24 +161,29 @@ export class Koala {
         t.position.set(x, 0.78, 0.38);
         t.rotation.z = rz;
         t.castShadow = true;
-        rig.add(t);
+        wrap.add(t);
       }
       for (const m of [scarf, knot]) m.castShadow = true;
-      rig.add(scarf, knot);
+      wrap.add(scarf, knot);
     } else {
-      const sh = new THREE.Shape();
-      sh.moveTo(0, 0);
-      sh.bezierCurveTo(0.09, 0.12, 0.08, 0.34, 0, 0.56);
-      sh.bezierCurveTo(-0.08, 0.34, -0.09, 0.12, 0, 0);
-      const lg = new THREE.ShapeGeometry(sh, 8);
-      const lp = lg.attributes.position;
-      for (let i = 0; i < lp.count; i++) lp.setZ(i, lp.getY(i) * lp.getY(i) * 0.35 + Math.abs(lp.getX(i)) * 0.6);
-      lg.computeVertexNormals();
-      const leaf = new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ color: '#7fa38a', roughness: 0.45, side: THREE.DoubleSide }));
-      leaf.position.set(0.28, 0.4, 0.04);
-      leaf.rotation.set(0.2, 0.3, -0.85);
-      leaf.castShadow = true;
-      head.add(leaf);
+      const knit = tex ? tex.cloth.clone() : null;
+      if (knit) {
+        knit.repeat.set(6, 2);
+        knit.needsUpdate = true;
+      }
+      const wool = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.92, normalMap: knit, normalScale: new THREE.Vector2(1, 1) });
+      const hat = new THREE.Group();
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.21, 28, 14, 0, TAU, 0, Math.PI / 2), wool('#3f78d6'));
+      dome.scale.y = 0.95;
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.215, 0.045, 10, 30), wool('#5b93ea'));
+      cuff.rotation.x = Math.PI / 2;
+      const bobble = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), wool('#eef4ff'));
+      bobble.position.y = 0.21 * 0.95 + 0.035;
+      hat.add(dome, cuff, bobble);
+      hat.position.set(0, 0.42, 0.02);
+      hat.rotation.x = 0.14;
+      hat.traverse((o) => { o.castShadow = true; });
+      head.add(hat);
     }
     rig.add(head);
 
@@ -226,6 +238,16 @@ export class Koala {
 
     root.traverse((o) => { if (o.isMesh) o.userData.koala = id; });
     this.#labels();
+  }
+
+  // How big this koala is now (0.5 of full size for a newborn baby, 1 fully grown). The first call
+  // sets it at once; later ones grow into it.
+  grow(size) {
+    this.sizeGoal = size;
+    if (!this.sized) {
+      this.size = size;
+      this.sized = true;
+    }
   }
 
   // Draw n of the fur shells (0 turns the fur off and leaves the solid body).
@@ -313,12 +335,21 @@ export class Koala {
     const far = Math.hypot(dx, dz);
     let mode = this.anim;
     this.moving = false;
+    this.size = damp(this.size, this.sizeGoal, 1.2, dt);
+    const pace = 0.3 + 0.7 * this.size; // little legs are slower
+    const baby = Math.max(0, 1 - (this.size - 0.5) / 0.5); // 1 newborn, 0 fully grown
+    this.root.scale.setScalar(this.size);
+    this.head.scale.setScalar(1 + 0.15 * baby); // babies have big heads for their bodies
+    if (this.scarf) {
+      this.scarf.scale.set(1 + 0.3 * baby, 1 + 0.1 * baby, 1 + 0.3 * baby);
+      this.scarf.position.y = -0.04 * baby;
+    }
 
     if (p.y > 0.02 && Math.hypot(this.goal.x - p.x, this.goal.z - p.z) > 0.25) {
-      p.y = Math.max(0, p.y - CLIMB * dt);
+      p.y = Math.max(0, p.y - CLIMB * pace * dt);
       mode = 'climbing';
     } else if (far > 0.06) {
-      const step = Math.min(far, WALK * dt);
+      const step = Math.min(far, WALK * pace * dt);
       p.x += (dx / far) * step;
       p.z += (dz / far) * step;
       this.heading += angleTo(this.heading, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
@@ -326,7 +357,7 @@ export class Koala {
       mode = 'walk';
       if (far <= step + 1e-6 && this.path.length) this.path.shift();
     } else if (Math.abs(this.goal.y - p.y) > 0.02) {
-      p.y += Math.sign(this.goal.y - p.y) * Math.min(Math.abs(this.goal.y - p.y), CLIMB * dt);
+      p.y += Math.sign(this.goal.y - p.y) * Math.min(Math.abs(this.goal.y - p.y), CLIMB * pace * dt);
       mode = 'climbing';
     }
     if (!this.moving && this.face != null) this.heading += angleTo(this.heading, this.face) * Math.min(1, dt * 4);

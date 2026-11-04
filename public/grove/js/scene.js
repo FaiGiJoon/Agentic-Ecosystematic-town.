@@ -24,8 +24,8 @@ import { rng } from './gfx/noise.js';
 const DAY_MS = 20 * 60000;
 const TAU = Math.PI * 2;
 const HIGH = SETTINGS.high;
-// Two cameras, both at ground level: first person (the visitor's own eyes, no body in view) and
-// third person (behind the visitor, never higher than a low chase angle: no bird's-eye view).
+// Two cameras, both at ground level and neither shows a person, only the koalas: first person (the
+// visitor's own eyes) and third person (behind them, never higher than a low chase angle: no bird's-eye view).
 const EYE = 1.55;
 const CHASE = { dist: 7.5, pitch: 0.2 };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -495,9 +495,8 @@ export class GroveScene {
     g.add(body, head, brim, crown, band, pack, lantern);
     this.visitor = { root: g, heading: Math.PI, target: null, body, lantern, walk: 0, moving: false };
     g.position.set(4, this.groundY(4, 10), 10);
-    g.traverse((o) => {
-      if (o.isMesh) o.castShadow = true;
-    });
+    // The visitor is only a place to stand: nothing of it is drawn in either camera, only the koalas.
+    g.visible = false;
     this.scene.add(g);
   }
 
@@ -517,7 +516,8 @@ export class GroveScene {
   #buildKoalas(list) {
     for (const k of list) {
       const view = new Koala(k, { tex: this.tex, groundY: this.groundY });
-      const s = spotFor(this.places, k.place, k.id, k.activity);
+      const s = spotFor(this.places, k.place, k.id, k.activity, k.reach);
+      view.grow(k.size ?? 1);
       view.place(s.x, s.y, s.z);
       view.tagEl.addEventListener('click', () => this.onPick(k.id));
       this.koalas.set(k.id, view);
@@ -594,7 +594,7 @@ export class GroveScene {
     this.pxScale = (h * dpr) / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
   }
 
-  // 'first': the visitor's eyes, body hidden (the lantern stays). 'third': a chase camera behind them.
+  // 'first': the visitor's eyes. 'third': a chase camera behind them. The visitor is never drawn.
   setCamera(name) {
     this.cam = name;
     const first = name === 'first';
@@ -603,9 +603,6 @@ export class GroveScene {
     this.camera.updateProjectionMatrix();
     this.resize();
     const v = this.visitor;
-    v.root.traverse((o) => {
-      if (o.isMesh && !v.lantern.getObjectById(o.id)) o.visible = !first;
-    });
     if (first) {
       this.look.yaw = v.heading + Math.PI;
       this.look.pitch = 0.02;
@@ -658,9 +655,10 @@ export class GroveScene {
       const view = this.koalas.get(k.id);
       if (!view) continue;
       const before = prev?.koalas.find((q) => q.id === k.id);
-      if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
+      if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1 * view.size, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
+      view.grow(k.size ?? 1);
       view.thinking = k.thinking;
-      const spot = spotFor(this.places, k.place, k.id, k.activity);
+      const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       const anim = animFor(k);
       view.setGoal(spot, anim, this.route(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
@@ -684,7 +682,11 @@ export class GroveScene {
     if (!view) return;
     if (e.kind === 'say') view.say(e.text);
     if (e.kind === 'think') view.thought(e.text);
-    const at = V(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 1.9, view.pos.z);
+    const at = V(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 1.9 * view.size, view.pos.z);
+    if (e.kind === 'grow') {
+      this.fx.sparkle(at.x, at.y - 0.4, at.z, 30, [1, 0.9, 0.5]);
+      this.fx.hearts(at.x, at.y, at.z, 5);
+    }
     if (e.kind === 'visitor' && e.action === 'give') this.fx.sparkle(at.x, at.y - 0.3, at.z, 16);
     if (e.kind === 'visitor' && e.action === 'pet') this.fx.hearts(at.x, at.y, at.z, 4);
     if (e.kind === 'visitor' && e.action === 'say') this.fx.sparkle(at.x, at.y, at.z, 5, [0.7, 0.9, 1]);
@@ -877,7 +879,6 @@ export class GroveScene {
     v.body.position.y = 0.72 + (moved > 0 ? Math.abs(Math.sin(v.walk)) * 0.07 : 0);
     v.lantern.rotation.z = Math.sin(v.walk) * 0.2;
     v.root.rotation.y = v.heading;
-    if (moved > 0 && Math.floor(v.walk / Math.PI) !== Math.floor((v.walk - moved * 3) / Math.PI)) this.fx.dust(p.x, p.y, p.z, 0.6);
   }
 
   #koalas_(dt, t) {
@@ -899,10 +900,10 @@ export class GroveScene {
       const gy = this.groundY(v.pos.x, v.pos.z);
       pushes[i].set(v.pos.x, 0, v.pos.z, v.pos.y < 0.3 ? 1.25 : 0);
       if (v.stepped) this.fx.dust(v.pos.x, gy, v.pos.z, 0.8);
-      const head = V(v.pos.x, v.pos.y + gy + 2.0, v.pos.z);
+      const head = V(v.pos.x, v.pos.y + gy + 2.0 * v.size, v.pos.z);
       if (v.anim === 'eat' && v.arrived && (this.fxTimers.eat += dt) > 0.4) {
         this.fxTimers.eat = 0;
-        this.fx.crumb(v.pos.x + Math.sin(v.heading) * 0.45, v.pos.y + gy + 1.35, v.pos.z + Math.cos(v.heading) * 0.45);
+        this.fx.crumb(v.pos.x + Math.sin(v.heading) * 0.45, v.pos.y + gy + 1.35 * v.size, v.pos.z + Math.cos(v.heading) * 0.45 * v.size);
       }
       if (v.anim === 'splash' && v.arrived) {
         if ((this.fxTimers.splash += dt) > 0.14) {
@@ -918,8 +919,8 @@ export class GroveScene {
         this.fx.gumnut(v.pos.x + Math.cos(t * 3) * 0.75, head.y + Math.sin(t * 5) * 0.08, v.pos.z + Math.sin(t * 3) * 0.75);
       }
     });
-    pushes[2].set(vp.x, 0, vp.z, 1.2);
-    // contact blobs under koalas and the visitor
+    pushes[2].set(vp.x, 0, vp.z, 0); // the visitor is not drawn, so it parts no grass either
+    // contact blobs under the koalas
     const who = this.blobs;
     who.forEach(({ mesh, who: w }) => {
       const isK = w.pos !== undefined;
@@ -927,9 +928,9 @@ export class GroveScene {
       const z = isK ? w.pos.z : w.root.position.z;
       const h = isK ? w.pos.y : 0;
       mesh.position.set(x, this.groundY(x, z) + 0.035, z);
-      const s = (isK ? 1.7 : 1.3) * (1 + h * 0.15);
+      const s = (isK ? 1.7 * w.size : 1.3) * (1 + h * 0.15);
       mesh.scale.set(s, s, 1);
-      mesh.visible = h < 1.4 && !(isK && w.anim === 'swing');
+      mesh.visible = isK && h < 1.4 && w.anim !== 'swing';
     });
     // selection and hover ring
     const target = this.koalas.get(this.selected ?? this.hover);
@@ -940,7 +941,7 @@ export class GroveScene {
       this.ring.position.set(x, this.groundY(x, z) + 0.05, z);
       const pulse = 1 + Math.sin(t * 3.2) * 0.05;
       const sel = this.selected === target.id;
-      this.ring.scale.setScalar(pulse * (sel ? 1.15 : 0.95));
+      this.ring.scale.setScalar(pulse * (sel ? 1.15 : 0.95) * (0.4 + 0.6 * target.size));
       this.ring.material.opacity = sel ? 0.95 : 0.4;
     }
   }

@@ -6,14 +6,15 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 // Where a koala stands for a place and activity: apart from its friend, beside
-// the pond rather than in it, up the trunk when climbing or eating.
-export function spotFor(places, placeId, koalaId, activity) {
+// the pond rather than in it, up the trunk when climbing or eating. reach (0 to 1) is how much of
+// the tree this koala is strong enough to climb: babies stay low on the trunk.
+export function spotFor(places, placeId, koalaId, activity, reach = 1) {
   const p = places[placeId];
   if (!p) return { x: 0, z: 0, y: 0 };
   const side = SIDE[koalaId] ?? 1;
   if (p.tree && (activity === 'climb' || activity === 'eat')) {
     const a = Math.atan2(-p.z, -p.x) + side * 0.9;
-    return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: activity === 'climb' ? 3.0 : 2.4 };
+    return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: (activity === 'climb' ? 3.0 : 2.4) * reach };
   }
   if (placeId === 'swing' && activity === 'play') return { x: p.x + side * 1.1, z: p.z, y: 0 };
   const r = placeId === 'pond' ? 5.4 : p.tree ? 1.9 : placeId === 'swing' ? 2.4 : 1.6;

@@ -160,14 +160,26 @@ test('the visitor can give, say and pet; bad requests are refused', () => {
   grove.act({ koala: 'bramble', kind: 'pet' });
   const log = grove.state().log;
   assert.ok(log.some((e) => e.kind === 'visitor' && /Hello Bramble!/.test(e.text)));
-  for (const item of ['ball', 'pebble', 'feather']) grove.act({ koala: 'bramble', kind: 'give', item });
+  grove.act({ koala: 'bramble', kind: 'give', item: 'ball' });
   const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
+  assert.equal(status(() => grove.act({ koala: 'bramble', kind: 'give', item: 'pebble' })), 409, 'a baby holds two things');
+  grove.world.koalas.bramble.strength = 80; // a strong koala holds four
+  for (const item of ['pebble', 'feather']) grove.act({ koala: 'bramble', kind: 'give', item });
   assert.equal(status(() => grove.act({ koala: 'bramble', kind: 'give', item: 'blossom' })), 409);
   assert.equal(status(() => grove.act({ koala: 'drop-bear', kind: 'pet' })), 404);
   assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'dance' })), 400);
   assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'give', item: 'diamond' })), 400);
   assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'say', text: '' })), 400);
   assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'say', text: 'x'.repeat(141) })), 400);
+});
+
+test('the state says how grown each koala is,', () => {
+  const { grove } = setup();
+  const [mallee, bramble] = grove.state().koalas;
+  assert.deepEqual([mallee.gender, mallee.stage, mallee.carry], ['girl', 'baby', 2]);
+  assert.deepEqual([bramble.gender, bramble.outfit], ['boy', 'a small blue hat']);
+  assert.ok(mallee.size < 0.6 && mallee.reach < 0.4 && mallee.strength === 5);
+  assert.deepEqual(mallee.nextStage, { label: 'Joey', at: 20 });
 });
 
 test('what the visitor did reaches the koala\'s next prompt', async () => {
