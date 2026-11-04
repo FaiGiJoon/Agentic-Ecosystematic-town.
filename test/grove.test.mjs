@@ -324,3 +324,27 @@ test('coming over to a friend (without a word) nudges that friend to react soon'
   const ruby = grove.state().koalas.find((k) => k.id === 'ruby');
   assert.ok(ruby.nextAt - now() <= 12000, `Ruby waits ${ruby.nextAt - now()} ms`);
 });
+
+test('a due baby is born in the grove, can be named once, and later thinks for itself', async () => {
+  const { grove, advance } = setup();
+  grove.world.baby = { due: 0, parents: ['crystal', 'ruby'] };
+  grove.play();
+  await openRound(grove, advance, 5000);
+  let s = grove.state();
+  const pip = s.koalas.find((k) => k.parents);
+  assert.ok(pip, 'a baby was born');
+  assert.equal(pip.name, 'Pip');
+  assert.equal(pip.follows, 'crystal');
+  assert.ok(s.log.some((e) => e.kind === 'grow' && /born/.test(e.text)));
+  grove.nameKoala(pip.id, 'Wattlebird');
+  assert.equal(grove.state().koalas.find((k) => k.id === pip.id).name, 'Wattlebird');
+  const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
+  assert.equal(status(() => grove.nameKoala('ruby', 'Bob')), 409);
+  assert.equal(status(() => grove.nameKoala(pip.id, '')), 400);
+  assert.equal(status(() => grove.nameKoala(pip.id, 'x'.repeat(25))), 400);
+  // strong enough: it decides for itself from now on
+  grove.world.koalas[pip.id].strength = 45;
+  await openRound(grove, advance, 70000);
+  s = grove.state();
+  assert.equal(s.koalas.find((k) => k.id === pip.id).follows, null);
+});

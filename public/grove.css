@@ -224,6 +224,15 @@ h3 { color: var(--muted); }
 .costs div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: var(--r-s); background: var(--glass-2); }
 .costs span { font-family: var(--mono); color: var(--muted); }
 .chip.stockchip b { color: var(--warm); }
+
+/* naming a newborn */
+#name-baby { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); z-index: 8; width: min(420px, calc(100% - 32px)); padding: var(--s-5); border-radius: var(--r-l); background: rgba(15, 21, 32, 0.95); border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: var(--shadow); }
+#name-baby[hidden] { display: none; }
+#name-baby h2 { margin: 0 0 var(--s-2); font: 700 22px var(--sans); color: var(--mint); }
+#name-baby label { display: block; margin: var(--s-3) 0 var(--s-2); font-size: var(--fs-s); color: var(--muted); }
+#name-baby .talkrow { display: flex; gap: var(--s-2); }
+#name-baby input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-s); border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); font: 15px var(--sans); }
+#name-baby .btn { background: var(--mint); color: var(--mint-ink); }
 #hint { position: fixed; bottom: 14px; left: calc((100% - 420px) / 2); transform: translateX(-50%); z-index: 3; padding: 7px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; pointer-events: none; backdrop-filter: blur(8px); }
 #toast { padding: 11px 18px; border-radius: var(--r-m); font: 700 var(--fs-m) var(--sans); box-shadow: var(--shadow); }
 

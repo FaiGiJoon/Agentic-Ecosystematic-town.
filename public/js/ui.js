@@ -72,6 +72,33 @@ export function createUI({ scene, api }) {
     }
   });
 
+  // --- naming a newborn ----------------------------------------------------------------
+  const nameForm = $('#name-baby');
+  let naming = null;
+  const asked = new Set();
+  nameForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = $('#baby-name');
+    try {
+      await api.name(naming, input.value.trim());
+      toast(`Welcome to the grove, ${input.value.trim()}!`);
+      nameForm.hidden = true;
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  function offerName() {
+    const baby = state.koalas.find((k) => k.parents && !k.named && !asked.has(k.id));
+    if (!baby || !nameForm.hidden) return;
+    naming = baby.id;
+    asked.add(baby.id);
+    const [m, d] = baby.parents.map(name);
+    nameForm.querySelector('.fine').textContent = `${m} and ${d} have a little ${baby.gender === 'boy' ? 'boy' : 'girl'}. For now ${baby.gender === 'boy' ? 'he' : 'she'} is called ${baby.name}.`;
+    $('#baby-name').value = baby.name;
+    nameForm.hidden = false;
+    $('#baby-name').select();
+  }
+
   // --- time of day ---------------------------------------------------------------------
   const timePop = $('#time-pop');
   const timeBtn = $('#time-btn');
@@ -412,6 +439,7 @@ export function createUI({ scene, api }) {
   function draw() {
     if (!state) return;
     drawChips();
+    offerName();
     if (tab === 'koalas') drawKoalas();
     if (tab === 'talk') drawTalk();
     if (tab === 'builds') drawBuilds();

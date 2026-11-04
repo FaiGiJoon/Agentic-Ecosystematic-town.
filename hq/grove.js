@@ -10,6 +10,7 @@ import {
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
+import { BABY_NAMES, bornBaby, graduates } from './grove-family.js';
 
 export const GROVE_DEFAULTS = {
   model: 'claude-haiku-5-5',
@@ -104,6 +105,8 @@ export class Grove {
     for (const id of Object.keys(this.world.koalas)) this.#run[id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
     this.world.builds = this.#meta('builds', []);
     this.world.stock = this.#meta('stock', { ...START_STOCK });
+    this.world.baby = this.#meta('baby', null);
+    this.world.nest = this.#meta('nest', null);
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
     if (this.playing) this.#schedule();
   }
@@ -233,11 +236,15 @@ export class Grove {
       const minutes = Math.min(2, (now - this.#lastDrift) / 60000);
       for (const k of this.#all()) {
         drift(this.world.koalas[k.id], minutes);
+        if (k.follows) k.strength = Math.min(100, k.strength + minutes); // babies grow by being looked after
         this.#save(k.id);
       }
     }
     this.#lastDrift = now;
-    if (active) this.#sightings();
+    if (active) {
+      this.#sightings();
+      this.#family();
+    }
     if (present !== this.#wasPresent) {
       this.#wasPresent = present;
       this.#emit();
@@ -247,6 +254,57 @@ export class Grove {
       const r = this.#run[k.id];
       if (!r.thinking && now >= r.nextAt) this.#decide(k.id);
     }
+  }
+
+  // Grove minutes since the first morning: the clock nesting and births run on.
+  #minute() {
+    const c = this.clock();
+    return (c.day - 1) * 1440 + c.hour * 60 + c.minute;
+  }
+
+  // Births when a baby is due, and babies old enough to start deciding for themselves.
+  #family() {
+    const w = this.world;
+    const now = this.#minute();
+    if (w.baby && now >= w.baby.due) {
+      const taken = new Set(this.#all().map((k) => k.name));
+      const name = BABY_NAMES.find((n) => !taken.has(n)) ?? `Joey ${this.#all().length}`;
+      let id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      while (w.koalas[id]) id += '_';
+      const parents = w.baby.parents.map((p) => w.koalas[p]);
+      bornBaby(w, now, name, id, this.rng() < 0.5 ? 'girl' : 'boy');
+      this.#run[id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
+      for (const p of parents) p.recent.push(`Your baby ${name} was born in the Mossy Hollow!`);
+      this.#log({ koala: id, kind: 'grow', text: `A baby koala was born: ${name}, the child of ${parents.map((p) => p.name).join(' and ')}!` });
+      this.#setMeta('baby', null);
+      for (const x of this.#all()) this.#save(x.id);
+      this.#emit();
+    }
+    for (const k of this.#all().filter(graduates)) {
+      k.follows = null;
+      k.recent.push('You feel big enough to go your own way now.');
+      this.#run[k.id].nextAt = this.now() + 1000;
+      this.#log({ koala: k.id, kind: 'grow', text: `${k.name} is old enough to decide for ${k.gender === 'boy' ? 'himself' : 'herself'} now.` });
+      this.#save(k.id);
+      this.#emit();
+    }
+  }
+
+  // The visitor names a newborn (within its first grove day).
+  nameKoala(id, name) {
+    const k = this.world.koalas[id];
+    if (!k || !Object.hasOwn(this.world.koalas, id)) throw new GroveError(404, 'no such koala');
+    if (!k.parents || this.#minute() - (k.bornAt ?? 0) > 1440) throw new GroveError(409, 'only a newborn can be named');
+    const t = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
+    if (!t || t.length > 24) throw new GroveError(400, 'a name is 1 to 24 characters');
+    k.persona = String(k.persona ?? '').replaceAll(k.name, t);
+    k.name = t;
+    k.named = true;
+    for (const x of this.#all()) x.recent.push(`The visitor named the baby ${t}.`);
+    this.#log({ koala: id, kind: 'visitor', text: `You named the baby ${t}`, action: 'name' });
+    for (const x of this.#all()) this.#save(x.id);
+    this.#emit();
+    return this.state();
   }
 
   // Once a grove hour, each koala may notice one of the critters.
@@ -308,7 +366,10 @@ export class Grove {
     }
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
+    this.world.minute = this.#minute();
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
+    this.#setMeta('baby', this.world.baby ?? null);
+    this.#setMeta('nest', this.world.nest ?? null);
     // babies go wherever the parent they follow goes
     for (const baby of this.#all().filter((x) => x.follows === id)) {
       baby.place = this.world.koalas[id].place;
@@ -459,6 +520,7 @@ export class Grove {
       plots: PLOTS,
       lands: LANDS.map((l) => ({ ...l, risen: landOf(this.world).includes(l) })),
       stock: stockOf(this.world),
+      family: { baby: this.world.baby ?? null, nest: this.world.nest ?? null },
       resources: RESOURCES,
       costs: COSTS,
       islands: ISLANDS.map((i) => ({ ...i, bridged: bridged(this.world).has(i.id) })),

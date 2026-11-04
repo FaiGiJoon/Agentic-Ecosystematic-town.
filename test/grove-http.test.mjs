@@ -126,3 +126,18 @@ test('POST /api/grove/time moves the clock; a bad time is 400', async () => {
   assert.equal((await post('/api/grove/time', { to: 'teatime' })).status, 400);
   assert.equal((await post('/api/grove/time', { to: 'noon' }, { 'content-type': 'text/plain' })).status, 415);
 });
+
+test('POST /api/grove/name names a newborn; anyone older is 409; bad names 400', async () => {
+  grove.world.baby = { due: 0, parents: ['crystal', 'ruby'] };
+  grove.play();
+  grove.heartbeat();
+  grove.tick();
+  const pip = grove.state().koalas.find((k) => k.parents);
+  assert.ok(pip);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'Sky' })).status, 200);
+  assert.equal((await post('/api/grove/name', { koala: 'ruby', name: 'Bob' })).status, 409);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: '' })).status, 400);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'x'.repeat(30) })).status, 400);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'Sky' }, { 'content-type': 'text/plain' })).status, 415);
+  grove.pause();
+});

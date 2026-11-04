@@ -30,6 +30,7 @@ export const KOALAS = [
 import {
   RESOURCES, ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
 } from './grove-economy.js';
+import { canNest, nestStep } from './grove-family.js';
 
 // The koalas used to be called Mallee and Bramble; old groves are renamed on start.
 export const RENAMED = { mallee: 'crystal', bramble: 'ruby' };
@@ -62,7 +63,7 @@ export const SIGHTINGS = [
   'A turtle poked its head out of its shell and blinked at you.',
   'A frog croaked somewhere near the lily pads.',
 ];
-export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'sit'];
+export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
 // the same site. A finished build stands at its plot and becomes a place to visit.
@@ -358,6 +359,7 @@ export function applyDecision(world, id, d) {
   const tell = (text, who = rest) => { for (const o of who) push(o.recent, text, MAX_RECENT); };
   let step = null;
   let stored = null;
+  let nested = false;
   if (d.action === 'build') {
     step = buildStep(world, k, rest, d);
     if (step?.missing) {
@@ -378,6 +380,16 @@ export function applyDecision(world, id, d) {
       d = { ...d, action: 'sit', target: '' };
     } else {
       k.res[d.target] = (k.res[d.target] ?? 0) + 1;
+    }
+  } else if (d.action === 'nest') {
+    const n = nestStep(world, id, world.minute ?? 0);
+    if (n.refused) {
+      push(k.recent, `You wanted to make a nest with ${f.name}, but ${n.refused}.`, MAX_RECENT);
+      d = { ...d, action: 'sit', target: '' };
+    } else if (n.pending) {
+      push(f.recent, `${k.name} is making a nest and looks at you hopefully. If you nest too, soon, you will have a baby.`, MAX_RECENT);
+    } else {
+      nested = true;
     }
   } else if (d.action === 'store') {
     k.place = 'stockpile';
@@ -422,11 +434,12 @@ export function applyDecision(world, id, d) {
 
   const did = step ? describeBuild(step)
     : d.action === 'gather' ? `gathered ${d.target} at the ${places[k.place]?.name ?? k.place}`
+    : d.action === 'nest' ? (nested ? `made a nest with ${f.name}` : 'started making a cozy nest')
     : stored ? (Object.keys(stored).length ? `stored ${amounts(stored)} in the Stockpile` : 'went to the Stockpile with empty paws')
     : describe(d, f.name, k.strength, places);
   push(k.recent, `You ${did}.`, MAX_RECENT);
   if (step?.together) tell(`${k.name} helped you build the ${step.b.title}.`, rest.filter((o) => o.place === k.place));
-  else if (d.action !== 'give' && d.action !== 'approach') tell(`${k.name} ${did} near you.`, rest.filter((o) => o.place === k.place));
+  else if (!['give', 'approach', 'nest'].includes(d.action)) tell(`${k.name} ${did} near you.`, rest.filter((o) => o.place === k.place));
   if (d.action === 'approach') push(f.recent, `${k.name} came over to you.`, MAX_RECENT);
   const log = [{ koala: id, kind: 'act', text: `${k.name} ${did}`, action: d.action, target: d.target }];
   if (d.say) {
@@ -445,6 +458,10 @@ export function applyDecision(world, id, d) {
   for (const l of step?.newLand ?? []) {
     for (const x of [k, ...rest]) push(x.recent, `The grove grew! New land rose from the water: ${l.name} (${l.id}).`, MAX_RECENT);
     log.push({ kind: 'land', text: `The grove grew: ${l.name} rose from the water!`, target: l.id });
+  }
+  if (nested) {
+    for (const x of [k, f]) push(x.recent, `${x === k ? `You and ${f.name}` : `You and ${k.name}`} made a nest together. A baby is on the way!`, MAX_RECENT);
+    log.push({ koala: id, kind: 'grow', text: `${k.name} and ${f.name} made a nest. A baby is on the way!` });
   }
   const stageNow = stageOf(k.strength);
   if (stageNow.id !== stageBefore.id) {
@@ -542,7 +559,9 @@ export function buildPrompt(world, id, clock) {
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
     `approach (go to ${f.name}), give (target: an item you hold, to ${f.name}),`,
     `gather (target: a resource found where you are; wood at the gum trees, water at the pond, stone at the lookout, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
-    'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name), sit.',
+    'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name),',
+    ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
+    'sit.',
     'Choose what you do next.',
   ];
   return lines.join('\n');

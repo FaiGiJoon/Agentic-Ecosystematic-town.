@@ -119,6 +119,10 @@ export function createApp({ grove, publicDir }) {
         const body = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.act(body)));
       }
+      if (pathname === '/api/grove/name') {
+        const { koala, name } = await readJson(req);
+        return sendJson(res, 200, refuse(() => grove.nameKoala(koala, name)));
+      }
       if (pathname === '/api/grove/time') {
         const { to } = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.setTime(to)));

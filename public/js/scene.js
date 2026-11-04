@@ -690,6 +690,10 @@ export class GroveScene {
       if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1 * view.size, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
       view.grow(k.size ?? 1);
       view.thinking = k.thinking;
+      if (view.name !== k.name) {
+        view.name = k.name; // the visitor named a baby
+        view.tagEl.querySelector('.n').textContent = k.name;
+      }
       this.#carry(view, carried(k));
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       const anim = animFor(k);

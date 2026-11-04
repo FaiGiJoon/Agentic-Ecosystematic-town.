@@ -165,6 +165,11 @@ export class Koala {
       }
       for (const m of [scarf, knot]) m.castShadow = true;
       wrap.add(scarf, knot);
+    } else if (id !== 'ruby') {
+      // a baby born in the grove: a little gum blossom tucked behind one ear
+      const blossom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshStandardMaterial({ color: '#f08aa0', roughness: 0.7 }));
+      blossom.position.set(0.3, 0.42, 0.05);
+      head.add(blossom);
     } else {
       const knit = tex ? tex.cloth.clone() : null;
       if (knit) {
