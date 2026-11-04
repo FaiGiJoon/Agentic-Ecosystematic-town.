@@ -63,7 +63,7 @@ export const SIGHTINGS = [
   'A turtle poked its head out of its shell and blinked at you.',
   'A frog croaked somewhere near the lily pads.',
 ];
-export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'research', 'sit'];
+export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'research', 'read', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
 // the same site. A finished build stands at its plot and becomes a place to visit.
@@ -197,6 +197,7 @@ export function newKoala(id) {
     bond: 0,
     opinion: '',
     memories: [],
+    learned: [],
     recent: [],
     thought: '',
     say: '',
@@ -239,6 +240,14 @@ export function placesOf(world) {
   return out;
 }
 
+// Books can be opened at Library Isle and at finished builds that are about reading.
+const BOOKISH = /\b(books?|reading|library|story|stories)\b/i;
+export function canReadAt(world, place) {
+  if (place === 'library_isle') return true;
+  return (world.builds ?? []).some((b) => b.done && siteOf(b) === place
+    && (b.kind === 'reading_nook' || BOOKISH.test(`${b.spec?.design ?? ''} ${b.title ?? ''}`)));
+}
+
 // The first {...} block in a string, parsed; null if there is none that parses.
 function jsonIn(s) {
   const start = s.indexOf('{');
@@ -276,6 +285,9 @@ export function parseDecision(raw, koala, places = PLACES) {
   } else if (action === 'research') {
     target = text(obj.target, 120); // the question, as asked
     if (!target) action = 'sit';
+  } else if (action === 'read') {
+    target = text(obj.target, 80); // the topic
+    if (!target) action = 'sit';
   } else if (action === 'gather') {
     if (!RESOURCES.includes(target)) {
       action = 'sit';
@@ -302,6 +314,7 @@ export function parseDecision(raw, koala, places = PLACES) {
 function describe(d, friendName, strength, places) {
   switch (d.action) {
     case 'file_ticket': return 'wrote a ticket for the visitor';
+    case 'read': return `opened a book about "${d.target}"`;
     case 'research': return `looked up "${d.target}" in the library`;
     case 'move': return `went to the ${places[d.target].name}`;
     case 'eat': return `ate eucalyptus at the ${PLACES[d.target].name}`;
@@ -431,6 +444,7 @@ export function applyDecision(world, id, d) {
     k.energy = clamp(k.energy - 8 * fatigue(k.strength), 0, 100);
     k.hunger = clamp(k.hunger + 4, 0, 100);
   }
+  if (d.action === 'read') k.energy = clamp(k.energy - 5 * fatigue(k.strength), 0, 100);
   if (d.action === 'climb') k.energy = clamp(k.energy - 8 * fatigue(k.strength), 0, 100);
   if (d.action === 'gather') k.energy = clamp(k.energy - 3 * fatigue(k.strength), 0, 100);
   if (d.action === 'build') {
@@ -573,10 +587,14 @@ export function buildPrompt(world, id, clock) {
     'Things you remember:',
     ...(k.memories.length ? k.memories.slice(-PROMPT_MEMORIES).map((m) => `- ${m}`) : ['- nothing yet']),
     '',
+    'Things you learned:',
+    ...((k.learned ?? []).length ? k.learned.slice(-5).map((m) => `- ${m}`) : ['- nothing yet']),
+    '',
     ...ticketLines(world, id),
     'What happened just now (oldest first):',
     ...(k.recent.length ? k.recent.slice(-PROMPT_RECENT).map((r) => `- ${r}`) : ['- nothing yet']),
     '',
+    'The library is on Library Isle (library_isle), across the bridge from the grove: there you can read books and look things up on the web.',
     `Places: ${Object.keys(places).map(place).join(', ')}. Eucalyptus grows on: ${TREES.join(', ')}.`,
     ...buildLines(world),
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
@@ -585,6 +603,7 @@ export function buildPrompt(world, id, clock) {
     'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name),',
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',
+    ...(canReadAt(world, k.place) ? ['read (target: a topic you are curious about; open a book about it),'] : []),
     ...(k.place === 'library_isle' ? ['research (target: a short question to look up in the library and on the web; a few times a day),'] : []),
     'sit.',
     'Choose what you do next.',

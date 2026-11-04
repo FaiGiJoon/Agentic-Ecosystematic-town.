@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   KOALAS, PLACES, ITEMS, ACTIONS, MOODS, DECISION_SCHEMA,
   newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt,
-  growthOf, carryLimit, STAGES, START_STRENGTH,
+  growthOf, carryLimit, canReadAt, STAGES, START_STRENGTH,
 } from '../hq/grove-world.js';
 
 const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])) });
@@ -298,4 +298,43 @@ test('review: a gift to a friend with full paws stays with the giver', () => {
   assert.equal(w.koalas.crystal.activity, 'sit');
   assert.match(w.koalas.crystal.recent.join(' '), /paws are full/);
   assert.doesNotMatch(w.koalas.ruby.recent.join(' '), /gave you/);
+});
+
+test('read: a topic, capped at 80 characters; empty sits', () => {
+  assert.ok(ACTIONS.includes('read'));
+  const k = newKoala('crystal');
+  assert.equal(parseDecision({ action: 'read', target: 'x'.repeat(200) }, k).target.length, 80);
+  assert.equal(parseDecision({ action: 'read', target: '  ' }, k).action, 'sit');
+});
+
+test('canReadAt: Library Isle and finished book-ish builds only', () => {
+  const w = world();
+  w.builds = [
+    { id: 1, kind: 'reading_nook', title: 'Nook', plot: 'plot_a', done: true },
+    { id: 2, kind: 'custom', title: 'Story Hut', plot: 'plot_b', done: true },
+    { id: 3, kind: 'custom', title: 'x', spec: { design: 'a shelf of books' }, plot: 'plot_c', done: true },
+    { id: 4, kind: 'reading_nook', title: 'Unfinished', plot: 'plot_d', done: false },
+    { id: 5, kind: 'bench', title: 'Bench', plot: 'plot_e', done: true },
+  ];
+  assert.ok(canReadAt(w, 'library_isle'));
+  for (const p of ['plot_a', 'plot_b', 'plot_c']) assert.ok(canReadAt(w, p), p);
+  for (const p of ['plot_d', 'plot_e', 'pond']) assert.ok(!canReadAt(w, p), p);
+});
+
+test('read: costs energy like play, is described, and the prompt offers it and lists what was learned', () => {
+  const w = world();
+  const k = w.koalas.crystal;
+  k.place = 'library_isle';
+  k.learned = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const before = k.energy;
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'read', target: 'frogs' }, k));
+  assert.ok(k.energy < before);
+  assert.match(log[0].text, /opened a book about "frogs"/);
+  const p = buildPrompt(w, 'crystal', { label: 'Mon 10:00', phase: 'morning' });
+  assert.match(p, /The library is on Library Isle \(library_isle\), across the bridge from the grove/);
+  assert.match(p, /read \(target: a topic/);
+  assert.match(p, /research \(target/);
+  assert.match(p, /Things you learned:\n- c\n- d\n- e\n- f\n- g/);
+  w.koalas.ruby.place = 'pond';
+  assert.doesNotMatch(buildPrompt(w, 'ruby', { label: 'x', phase: 'y' }), /read \(target/);
 });

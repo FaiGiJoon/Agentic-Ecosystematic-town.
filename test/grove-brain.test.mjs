@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { koalaArgs, researchArgs, RESEARCH_SCHEMA, RESEARCH_SYSTEM, think } from '../hq/grove-brain.js';
+import { koalaArgs, researchArgs, readArgs, READ_SYSTEM, RESEARCH_SCHEMA, RESEARCH_SYSTEM, think } from '../hq/grove-brain.js';
 import { DECISION_SCHEMA } from '../hq/grove-world.js';
 
 const FAKE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-koala.mjs');
@@ -98,5 +98,23 @@ test('researchArgs: the same isolation, but web search as the only tool, its own
     '--permission-mode', 'dontAsk',
     '--no-session-persistence',
     '--max-budget-usd', '0.1',
+  ]);
+});
+
+test('readArgs: no tools at all, the book system prompt, the research schema and its own budget', () => {
+  assert.match(READ_SYSTEM, /picture book/);
+  assert.deepEqual(readArgs({ prompt: 'Q', model: 'claude-haiku-5-5', callUsd: 0.03 }), [
+    '-p', 'Q',
+    '--output-format', 'json',
+    '--model', 'claude-haiku-5-5',
+    '--system-prompt', READ_SYSTEM,
+    '--json-schema', JSON.stringify(RESEARCH_SCHEMA),
+    '--tools', '',
+    '--setting-sources', '',
+    '--strict-mcp-config',
+    '--disable-slash-commands',
+    '--permission-mode', 'dontAsk',
+    '--no-session-persistence',
+    '--max-budget-usd', '0.03',
   ]);
 });

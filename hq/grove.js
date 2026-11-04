@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, canReadAt, growthOf, carryLimit,
 } from './grove-world.js';
-import { koalaArgs, researchArgs, think as callClaude } from './grove-brain.js';
+import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
 import { BABY_NAMES, babyPersona, bornBaby, graduates } from './grove-family.js';
 import { Tickets, MAX_OPEN_TICKETS } from './grove-tickets.js';
@@ -318,14 +318,40 @@ export class Grove {
     return true;
   }
 
-  // The research call itself: its own budget and only web search. What it learns is remembered.
-  async #research(id, question) {
+  // Reading happens at Library Isle or at a finished build about books, a few times a day.
+  #mayRead(id) {
     const k = this.world.koalas[id];
-    const prompt = `${k.name} the koala asks: ${question}\nAnswer as a short fact a koala could remember, and one idea for the grove, or empty.`;
-    const args = researchArgs({ prompt, model: this.config.model, callUsd: this.config.researchUsd });
+    if (this.capped) {
+      k.recent.push('You wanted to read, but the grove has used its tokens for today.');
+      return false;
+    }
+    if (!canReadAt(this.world, k.place)) {
+      k.recent.push('You wanted to read, but you can read only at the library or somewhere with books.');
+      return false;
+    }
+    const day = startOfDay(this.now());
+    const used = this.#meta('reads', { day, count: 0 });
+    if (used.day === day && used.count >= this.config.readsPerDay) {
+      k.recent.push('You wanted to read, but you have read enough for today. Come back tomorrow.');
+      return false;
+    }
+    this.#setMeta('reads', { day, count: (used.day === day ? used.count : 0) + 1 });
+    return true;
+  }
+
+  // A learning call: a book (no tools) or the web (search only), each with its own budget.
+  // What comes back is kept in `learned` and told to koalas at the same place.
+  async #learn(id, topic, { web }) {
+    const k = this.world.koalas[id];
+    const prompt = web
+      ? `${k.name} the koala asks: ${topic}\nAnswer as a short fact a koala could remember, and one idea for the grove, or empty.`
+      : `${k.name} the koala opens a book about: ${topic}\nTell one true, simple thing about it as a short fact a koala could remember, and one idea for the grove, or empty.`;
+    const args = web
+      ? researchArgs({ prompt, model: this.config.model, callUsd: this.config.researchUsd })
+      : readArgs({ prompt, model: this.config.model, callUsd: this.config.readUsd });
     let out;
     try {
-      out = await this.brain({ koala: id, kind: 'research', prompt, args });
+      out = await this.brain({ koala: id, kind: web ? 'research' : 'read', prompt, args });
     } catch (err) {
       out = { ok: false, raw: null, usage: null, error: err.message };
     }
@@ -337,16 +363,22 @@ export class Grove {
     const fact = typeof raw?.fact === 'string' ? raw.fact.trim().replace(/\s+/g, ' ').slice(0, 200) : '';
     if (u) this.q.usage.run(this.now(), id, fact ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms);
     if (!out.ok || !fact) {
-      this.#log({ koala: id, kind: 'error', text: `${k.name}'s research found nothing: ${out.error ?? 'no answer'}` });
+      this.#log({ koala: id, kind: 'error', text: `${k.name}'s ${web ? 'research' : 'reading'} found nothing: ${out.error ?? 'no answer'}` });
       return;
     }
     const idea = typeof raw.idea === 'string' ? raw.idea.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
-    k.memories.push(fact);
-    if (k.memories.length > 12) k.memories.splice(0, k.memories.length - 12);
-    k.recent.push(`At the library you learned: ${fact}${idea ? ` It gave you an idea: ${idea}` : ''}`);
-    if (k.recent.length > 10) k.recent.splice(0, k.recent.length - 10);
+    k.learned = [...(k.learned ?? []), fact].slice(-8);
+    const trim = (x) => { if (x.recent.length > 10) x.recent.splice(0, x.recent.length - 10); };
+    k.recent.push(`${web ? 'On the web you found out' : 'At the library you read'}: ${fact}${idea ? ` It gave you an idea: ${idea}` : ''}`);
+    trim(k);
+    for (const o of this.#all()) {
+      if (o.id === id || o.place !== k.place) continue;
+      o.recent.push(`${k.name} told you: ${fact}`);
+      trim(o);
+      this.#save(o.id);
+    }
     this.#save(id);
-    this.#log({ koala: id, kind: 'learn', text: `${k.name} learned: ${fact}` });
+    this.#log({ koala: id, kind: 'learn', text: web ? `${k.name} looked up "${topic}" on the web: ${fact}` : `${k.name} read about ${topic}: ${fact}` });
   }
 
   // A koala writes a ticket (its say is the text); at most three wait at once.
@@ -469,9 +501,13 @@ export class Grove {
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
     if (decision.action === 'file_ticket') this.#fileTicket(id, decision);
     let question = null;
+    let topic = null;
     if (decision.action === 'research') {
       question = this.#mayResearch(id) ? decision.target : null;
       if (!question) decision.action = 'sit';
+    } else if (decision.action === 'read') {
+      topic = this.#mayRead(id) ? decision.target : null;
+      if (!topic) decision.action = 'sit';
     }
     this.world.minute = this.#minute();
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
@@ -499,7 +535,8 @@ export class Grove {
     if (r.replyDue) next = Math.min(next, Math.max(this.now() + this.#between(this.config.replyMinMs, this.config.replyMaxMs), r.lastStart + this.config.gapMs));
     r.nextAt = next;
     r.replyDue = false;
-    if (question) return this.#research(id, question);
+    if (question) return this.#learn(id, question, { web: true });
+    if (topic) return this.#learn(id, topic, { web: false });
   }
 
   async idle() {
