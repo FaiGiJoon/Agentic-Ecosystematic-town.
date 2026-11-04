@@ -16,7 +16,7 @@ const CLEAR = 1.7;
 const PLOT_CLEAR = 2.8;
 
 // clear: extra spots (the build plots) where nothing big may stand, without a path to them.
-export function makeTerrain(places, { clear = [] } = {}) {
+export function makeTerrain(places, { clear = [], roads = [] } = {}) {
   const pond = places.pond;
   const look = places.lookout;
   const c = places.clearing;
@@ -53,6 +53,9 @@ export function makeTerrain(places, { clear = [] } = {}) {
     const len = total - (id === 'pond' ? SHORE_R + 0.2 : 1.2);
     segs.push({ ax: c.x, az: c.z, bx: c.x + (dx / total) * len, bz: c.z + (dz / total) * len });
   }
+
+  // Extra roads: clearing to a point, e.g. a bridge foot that is not a place.
+  for (const p of roads) segs.push({ ax: c.x, az: c.z, bx: p.x, bz: p.z });
 
   // 0..1: how worn the ground is here. Edges wobble so paths do not look ruled.
   function pathMask(x, z) {

@@ -28,7 +28,7 @@ export const KOALAS = [
 ];
 
 import {
-  RESOURCES, ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
+  RESOURCES, ISLANDS, OPEN_ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
 } from './grove-economy.js';
 import { canNest, nestStep } from './grove-family.js';
 
@@ -329,7 +329,7 @@ function buildStep(world, k, rest, d) {
   let started = false;
   const bp = BLUEPRINTS[d.target];
   // a bridge is built once; asking again just helps with whatever is underway
-  const wanted = bp && !(bp.bridge && world.builds.some((x) => x.kind === d.target));
+  const wanted = bp && !(bp.bridge && (world.builds.some((x) => x.kind === d.target) || OPEN_ISLANDS.includes(bp.bridge)));
   if (!b && wanted && open.length < MAX_OPEN) {
     const here = placesOf(world)[k.place] ?? PLACES.clearing;
     const dist = (p) => Math.hypot(p.x - here.x, p.z - here.z);
@@ -540,7 +540,7 @@ function buildLines(world) {
   const next = LANDS[landOf(world).length];
   const stock = stockOf(world);
   const affordable = Object.entries(BLUEPRINTS).filter(([id, bp]) => canAfford(stock, costOf(id)).ok
-    && !(bp.bridge && (world.builds ?? []).some((b) => b.kind === id)));
+    && !(bp.bridge && ((world.builds ?? []).some((b) => b.kind === id) || OPEN_ISLANDS.includes(bp.bridge))));
   return [
     `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
     `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,

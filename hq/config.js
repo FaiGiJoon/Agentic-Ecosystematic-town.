@@ -27,7 +27,10 @@ export default {
     callUsd: positiveNumber('GROVE_CALL_USD', env.GROVE_CALL_USD, 0.05, { max: 1 }),
     dayUsd: positiveNumber('GROVE_DAY_USD', env.GROVE_DAY_USD, 0.5),
     // research trips use web search: rarer, and with their own budget
-    researchPerDay: positiveNumber('GROVE_RESEARCH_PER_DAY', env.GROVE_RESEARCH_PER_DAY, 3, { integer: true, max: 50 }),
+    researchPerDay: positiveNumber('GROVE_RESEARCH_PER_DAY', env.GROVE_RESEARCH_PER_DAY, 6, { integer: true, max: 50 }),
+    // reading a book from the library: its own daily count and price
+    readsPerDay: positiveNumber('GROVE_READS_PER_DAY', env.GROVE_READS_PER_DAY, 16, { integer: true, max: 100 }),
+    readUsd: positiveNumber('GROVE_READ_USD', env.GROVE_READ_USD, 0.03, { max: 1 }),
     researchUsd: positiveNumber('GROVE_RESEARCH_USD', env.GROVE_RESEARCH_USD, 0.1, { max: 1 }),
   },
   root,

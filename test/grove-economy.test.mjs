@@ -131,3 +131,26 @@ test('review: heading for an unbridged island, the koala sits and learns it need
   assert.equal(w.koalas.crystal.activity, 'sit');
   assert.match(w.koalas.crystal.recent.join(' '), /Sandy Shoal yet; it needs a bridge/);
 });
+
+test('the Library Isle is open from day one: bridged, a place, reachable, and its bridge is never offered', async () => {
+  const { OPEN_ISLANDS, bridgeFoot, islandById } = await import('../hq/grove-economy.js');
+  assert.deepEqual(OPEN_ISLANDS, ['library_isle']);
+  const w = world();
+  assert.ok(bridged(w).has('library_isle'));
+  assert.ok(placesOf(w).library_isle);
+  assert.ok(!bridged(w).has('sandy_shoal'));
+  const k = w.koalas.crystal;
+  const d = parseDecision({ action: 'move', target: 'library_isle' }, k, placesOf(w));
+  assert.equal(d.action, 'move');
+  assert.equal(d.target, 'library_isle');
+  assert.equal(d.note ?? '', '');
+  const foot = bridgeFoot(islandById('library_isle'));
+  assert.ok(Math.abs(foot.x + 4.4) < 0.2 && Math.abs(foot.z - 21) < 0.2);
+  w.stock = { wood: 20, stone: 20 };
+  assert.doesNotMatch(buildPrompt(w, 'crystal', groveClock(0)), /bridge_library_isle/);
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /bridge_sandy_shoal/);
+  const before = w.builds.length;
+  act(w, 'crystal', { action: 'build', target: 'bridge_library_isle' });
+  assert.equal(w.builds.length, before);
+  assert.deepEqual(w.stock, { wood: 20, stone: 20 });
+});

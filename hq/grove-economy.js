@@ -11,6 +11,9 @@ export const ISLANDS = [
   { id: 'library_isle', name: 'Library Isle', resource: 'book', x: -8, z: 38, r: 6 },
 ];
 
+// Islands reachable from day one: their bridge already stands and is never built.
+export const OPEN_ISLANDS = ['library_isle'];
+
 // What can be gathered where. Sources never run out.
 export const SOURCES = {
   big_gum: ['wood'],
@@ -80,7 +83,8 @@ export function amounts(res) {
 
 // Islands whose bridge is finished.
 export function bridged(world) {
-  return new Set((world.builds ?? []).filter((b) => b.done && b.kind.startsWith('bridge_')).map((b) => b.kind.slice(7)));
+  const built = (world.builds ?? []).filter((b) => b.done && b.kind.startsWith('bridge_')).map((b) => b.kind.slice(7));
+  return new Set([...OPEN_ISLANDS, ...built]);
 }
 
 // Where the koalas stand to build a bridge: its island end.

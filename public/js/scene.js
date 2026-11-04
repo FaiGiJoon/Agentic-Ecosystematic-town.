@@ -53,6 +53,14 @@ function readPref() {
   try { return localStorage.getItem('grove-quality'); } catch { return null; }
 }
 
+// The library bridge stands from day one: its foot is 21.5 out toward the island (grove-economy's bridgeFoot).
+function libraryRoad(places) {
+  const l = places.library_isle;
+  if (!l) return [];
+  const d = Math.hypot(l.x, l.z) || 1;
+  return [{ x: (l.x / d) * 21.5, z: (l.z / d) * 21.5 }];
+}
+
 export class GroveScene {
   constructor(container, { places, koalas, plots = [] }) {
     const t0 = performance.now();
@@ -111,7 +119,7 @@ export class GroveScene {
     this.tex = buildTextures({ size: S.texSize, maxAniso: r.capabilities.getMaxAnisotropy() });
     lap('textures');
     // build plots stay clear of trees and rocks, so what the koalas build has room
-    this.terrain = makeTerrain(places, { clear: plots.filter((p) => !p.land) });
+    this.terrain = makeTerrain(places, { clear: plots.filter((p) => !p.land), roads: libraryRoad(places) });
     this.terrain.pond = places.pond;
     const T = this.terrain;
     // new land and its bridges first, then the island itself

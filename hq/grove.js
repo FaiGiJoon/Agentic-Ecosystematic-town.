@@ -31,7 +31,9 @@ export const GROVE_DEFAULTS = {
   presenceMs: 45000, // the page must check in this often
   tickMs: 1000,
   maxFailures: 3,
-  researchPerDay: 3,
+  researchPerDay: 6,
+  readsPerDay: 16,
+  readUsd: 0.03,
   researchUsd: 0.1,
 };
 

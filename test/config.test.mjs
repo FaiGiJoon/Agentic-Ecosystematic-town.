@@ -48,9 +48,9 @@ test('config: the koalas default to Haiku, a $0.05 call budget and a $0.50 day',
   assert.equal(config.port, 4317);
 });
 
-test('config: research is limited to 3 a day at $0.10 each by default, and the limit must be a whole number', async () => {
+test('config: research costs $0.10 each by default, and the limit must be a whole number', async () => {
   const { default: config } = await import('../hq/config.js');
-  assert.equal(config.grove.researchPerDay, 3);
+  assert.equal(config.grove.researchPerDay, 6);
   assert.equal(config.grove.researchUsd, 0.1);
   const { spawnSync } = await import('node:child_process');
   const r = spawnSync(process.execPath, ['-e', "import('./hq/config.js')"], {
@@ -58,4 +58,23 @@ test('config: research is limited to 3 a day at $0.10 each by default, and the l
   });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /GROVE_RESEARCH_PER_DAY/);
+});
+
+test('config: research defaults to 6 a day; reads default to 16 a day at $0.03', async () => {
+  const { default: config } = await import('../hq/config.js');
+  assert.equal(config.grove.researchPerDay, 6);
+  assert.equal(config.grove.readsPerDay, 16);
+  assert.equal(config.grove.readUsd, 0.03);
+  const { spawnSync } = await import('node:child_process');
+  const run = (env) => spawnSync(process.execPath, ['-e', "import('./hq/config.js').then((m) => console.log(JSON.stringify([m.default.grove.readsPerDay, m.default.grove.readUsd])))"], {
+    cwd: new URL('..', import.meta.url), env: { ...process.env, ...env }, encoding: 'utf8',
+  });
+  const ok = run({ GROVE_READS_PER_DAY: '40', GROVE_READ_USD: '0.5' });
+  assert.equal(ok.status, 0);
+  assert.deepEqual(JSON.parse(ok.stdout), [40, 0.5]);
+  for (const env of [{ GROVE_READS_PER_DAY: '0' }, { GROVE_READS_PER_DAY: '101' }, { GROVE_READS_PER_DAY: '2.5' }, { GROVE_READ_USD: '2' }]) {
+    const r = run(env);
+    assert.notEqual(r.status, 0, JSON.stringify(env));
+    assert.match(r.stderr, /GROVE_READ/);
+  }
 });
