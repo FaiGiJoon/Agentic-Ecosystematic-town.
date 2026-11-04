@@ -2,7 +2,7 @@
 // panel (Koalas, Talk, Meter), the inspector card with the visitor's actions, and
 // the event feed. Model text is always inserted as text, never as HTML.
 
-import { fmtUsd, fmtTokens, statusOf } from './view.js';
+import { fmtUsd, fmtTokens, statusOf, stockText } from './view.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -10,7 +10,7 @@ const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></
 const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
-  approach: 'keeping company', give: 'sharing', build: 'building', sit: 'sitting',
+  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', sit: 'sitting',
 };
 const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow' };
 
@@ -303,15 +303,24 @@ export function createUI({ scene, api }) {
         <div class="bmeta">${b.done ? 'Built' : `${b.progress} of ${b.effort} steps`} by ${esc(who(b))}, at the ${esc(state.places[b.plot]?.name ?? b.plot)}</div>
       </div>`;
     const toNext = next ? 2 - (done.length % 2) : 0;
+    const stock = state.stock ?? {};
+    const cost = (c) => Object.entries(c ?? {}).map(([r, n]) => `${n} ${r}`).join(', ');
     $('#tab-builds').innerHTML = `
-      <p class="empty">The koalas decide for themselves what to build and what to call it. Building together goes twice as fast.</p>
+      <p class="empty">The koalas decide for themselves what to build and what to call it. Each build is paid for from the Stockpile, and building together goes twice as fast.</p>
+      <h3>Stockpile</h3>
+      <div class="stock">${['wood', 'water', 'sand', 'stone', 'book'].map((r) => `<span class="res res-${r}"><i></i>${stock[r] ?? 0} ${r === 'book' ? 'books' : r}</span>`).join('')}</div>
+      <h3>Islands</h3>
+      <div class="rows">${(state.islands ?? []).map((i) => `<div class="row islandrow"><div class="name"><span class="res res-${i.resource}"><i></i></span>${esc(i.name)}</div>
+        <div class="meta">${i.bridged ? 'bridged' : 'needs a bridge: 4 wood, 2 stone'}</div></div>`).join('')}</div>
       <h3>Going up</h3>
       ${open.length ? open.map(card).join('') : '<p class="empty">Nothing is being built right now.</p>'}
       <h3>Built (${done.length})</h3>
       ${done.length ? done.map(card).join('') : '<p class="empty">Nothing yet. Their first build will appear here and in the grove.</p>'}
       <h3>The grove</h3>
       <p class="lastcall">${risen.length ? `New land so far: ${risen.map((l) => esc(l.name)).join(', ')}.` : 'Just the island for now.'}
-        ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>`;
+        ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>
+      <h3>What things cost</h3>
+      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}</div>`;
   }
 
   function drawTalk() {
@@ -386,6 +395,7 @@ export function createUI({ scene, api }) {
     const u = state.usage;
     $('#chips').innerHTML = `
       <div class="chip status ${st.key}" title="${esc(st.text)}"><i></i>${esc({ live: 'Live', thinking: 'Thinking', paused: 'Paused', capped: 'Cap reached', away: 'Waiting', offline: 'Offline' }[st.key])}</div>
+      <div class="chip stockchip" title="What is in the Stockpile">Stockpile <b>${esc(stockText(state.stock))}</b></div>
       <div class="chip real" title="Real spend today, against GROVE_DAY_USD">Today <b>${fmtUsd(u.today.cost)}</b> / ${fmtUsd(u.dayUsd)}</div>
       <div class="chip real" title="Real tokens today, in and out">Tokens <b>${fmtTokens(u.today.tokens_in + u.today.tokens_out)}</b></div>`;
     playBtn.innerHTML = state.playing ? `${ICON('i-pause')}Pause` : `${ICON('i-playbtn')}Play`;

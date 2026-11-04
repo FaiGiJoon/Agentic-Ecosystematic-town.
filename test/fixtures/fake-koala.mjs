@@ -29,6 +29,14 @@ function invent() {
     { action: 'climb', target: pick(['big_gum', 'blue_gum', 'river_gum']), say: '', mood: 'content' },
     { action: 'sit', target: '', say: pick(['The wind smells like rain.', '', 'Hmm.']), mood: 'cozy' },
   ];
+  // the economy: gather what is here, store what is carried, head to wood when paws are empty
+  const here = /Here you can gather: (\w+)/.exec(prompt)?.[1];
+  const carrying = /You carry: (?!nothing)/.test(prompt);
+  if (here) options.push({ action: 'gather', target: here, say: pick(['', 'Ooh, ' + here + '!', 'One more!']), mood: 'curious' }, { action: 'gather', target: here, say: '', mood: 'content' });
+  if (carrying) options.push({ action: 'store', target: '', say: pick(['', 'Into the pile it goes!']), mood: 'happy' }, { action: 'store', target: '', say: '', mood: 'content' });
+  if (!here && !carrying) options.push({ action: 'move', target: pick(['big_gum', 'river_gum', 'blue_gum', 'lookout', 'pond']), say: '', mood: 'curious' });
+  const bridge = /(bridge_\w+) \(Bridge to/.exec(prompt)?.[1];
+  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', say: 'Let us build a bridge!', mood: 'curious' });
   if (/You can build/.test(prompt)) {
     const underway = /Being built: (?!nothing)/.test(prompt);
     const names = ['Sky Nest', 'Cozy Corner', 'Moon Perch', 'Gumnut Lodge', 'Pebble Path', 'Snack Shack', 'Glow Post'];

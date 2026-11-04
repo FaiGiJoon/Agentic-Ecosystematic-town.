@@ -212,6 +212,18 @@ h3 { color: var(--muted); }
 .build-label small { font: 10px var(--mono); color: #d7dee8; }
 .build-label.done { background: rgba(15, 21, 32, 0.55); }
 .build-label.done .prog, .build-label.done small { display: none; }
+
+/* resources: the stockpile, island rows and costs */
+.stock { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.res { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-xs) var(--mono); }
+.stock .res { padding: 6px 10px; border-radius: 99px; background: var(--glass-2); border: 1px solid var(--line); }
+.res i { width: 10px; height: 10px; border-radius: 3px; background: var(--rc); display: inline-block; }
+.res-wood { --rc: #8a6a4a; } .res-water { --rc: #4e8fa3; } .res-sand { --rc: #e6d29a; } .res-stone { --rc: #a9a196; } .res-book { --rc: #b05a3c; }
+.islandrow { cursor: default; }
+.costs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: var(--fs-xs); }
+.costs div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: var(--r-s); background: var(--glass-2); }
+.costs span { font-family: var(--mono); color: var(--muted); }
+.chip.stockchip b { color: var(--warm); }
 #hint { position: fixed; bottom: 14px; left: calc((100% - 420px) / 2); transform: translateX(-50%); z-index: 3; padding: 7px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; pointer-events: none; backdrop-filter: blur(8px); }
 #toast { padding: 11px 18px; border-radius: var(--r-m); font: 700 var(--fs-m) var(--sans); box-shadow: var(--shadow); }
 

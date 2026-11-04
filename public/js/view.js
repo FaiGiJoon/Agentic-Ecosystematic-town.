@@ -115,3 +115,18 @@ export function skyAt(frac) {
     night: clamp01((0.45 - sun) / 0.35),
   };
 }
+
+// --- resources -------------------------------------------------------------------------
+const RESOURCE_ORDER = ['wood', 'water', 'sand', 'stone', 'book'];
+export const RESOURCE_COLORS = { wood: '#8a6a4a', water: '#4e8fa3', sand: '#e6d29a', stone: '#a9a196', book: '#b05a3c' };
+
+// "6 wood · 1 sand", or "empty".
+export function stockText(stock) {
+  const parts = RESOURCE_ORDER.filter((r) => stock?.[r] > 0).map((r) => `${stock[r]} ${r}`);
+  return parts.length ? parts.join(' · ') : 'empty';
+}
+
+// One entry per resource unit in a koala's paws, in resource order (drawn as little blocks).
+export function carried(k) {
+  return RESOURCE_ORDER.flatMap((r) => Array(Math.max(0, k.res?.[r] ?? 0)).fill(r));
+}

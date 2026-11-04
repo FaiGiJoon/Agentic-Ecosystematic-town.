@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { buildIslet } from './terrain.js';
-import { bridgeEnds } from '../view.js';
+import { bridgeEnds, RESOURCE_COLORS } from '../view.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...extra });
 const WOOD = mat('#8a6a4a');
@@ -110,6 +110,79 @@ const MODELS = {
     g.add(cyl(0.03, 0.03, 1.4, WOOD, 0.75, 5.4, 0.75));
     g.add(box(0.5, 0.3, 0.02, mat('#f2c14e'), 1.0, 5.9, 0.75));
   },
+  well(g) {
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.7, 14, 1, true), mat('#a9a196', { roughness: 0.95, side: THREE.DoubleSide }));
+    ring.position.y = 0.35;
+    const water = new THREE.Mesh(new THREE.CircleGeometry(0.7, 14), mat('#4e8fa3', { roughness: 0.2 }));
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = 0.45;
+    g.add(ring, water, cyl(0.06, 0.06, 1.6, WOOD, -0.7, 0.8, 0), cyl(0.06, 0.06, 1.6, WOOD, 0.7, 0.8, 0), log(1.6, 0.06, WOOD, 0, 1.55, 0));
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.6, 4), mat('#b05a3c'));
+    roof.position.y = 1.9;
+    roof.rotation.y = Math.PI / 4;
+    g.add(roof, cyl(0.12, 0.1, 0.2, WOOD, 0, 1.1, 0));
+  },
+  reading_nook(g) {
+    g.add(log(1.6, 0.16, PALE, 0, 0.42, 0.5), cyl(0.18, 0.2, 0.4, WOOD, -0.6, 0.2, 0.5), cyl(0.18, 0.2, 0.4, WOOD, 0.6, 0.2, 0.5));
+    g.add(box(1.4, 1.3, 0.35, WOOD, 0, 0.65, -0.5));
+    const books = ['#b05a3c', '#4e8fa3', '#f2c14e', '#6f9a62', '#c9b6f2'];
+    for (let i = 0; i < 10; i++) g.add(box(0.1, 0.3, 0.22, mat(books[i % books.length]), -0.55 + (i % 5) * 0.27, 0.45 + Math.floor(i / 5) * 0.45, -0.32));
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(1.4, 0.6, 9), LEAF);
+    shade.position.set(0, 2.1, 0);
+    g.add(shade, cyl(0.05, 0.05, 1.9, WOOD, 0, 1.0, 0.05));
+  },
+};
+
+// Dressing for each resource island, so you can tell from the shore what it holds.
+const DRESS = {
+  water(g, r) {
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(r * 0.35, 20), mat('#4e8fa3', { roughness: 0.15, metalness: 0.1 }));
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = r * 0.07 + 0.02;
+    g.add(pool);
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      g.add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), STONE).translateX(Math.cos(a) * r * 0.37).translateZ(Math.sin(a) * r * 0.37).translateY(r * 0.07));
+    }
+    // a thin waterfall spilling over the edge
+    const fall = new THREE.Mesh(new THREE.PlaneGeometry(0.9, r * 1.6), mat('#9fd4ea', { transparent: true, opacity: 0.7, emissive: '#4e8fa3', emissiveIntensity: 0.25, side: THREE.DoubleSide }));
+    fall.position.set(r * 0.98, -r * 0.7, 0);
+    fall.rotation.y = Math.PI / 2;
+    g.add(fall);
+  },
+  sand(g, r) {
+    const beach = new THREE.Mesh(new THREE.CircleGeometry(r * 0.9, 28), mat('#e6d29a', { roughness: 1 }));
+    beach.rotation.x = -Math.PI / 2;
+    beach.position.y = r * 0.05;
+    g.add(beach);
+    for (let i = 0; i < 7; i++) {
+      const shell = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 6), mat(i % 2 ? '#f6e7c8' : '#f08aa0'));
+      shell.position.set(Math.cos(i * 2.1) * r * 0.5, r * 0.06, Math.sin(i * 2.1) * r * 0.5);
+      shell.rotation.z = Math.PI / 2;
+      g.add(shell);
+    }
+  },
+  stone(g, r) {
+    for (let i = 0; i < 8; i++) {
+      const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + (i % 3) * 0.25, 0), STONE);
+      s.position.set(Math.cos(i * 1.7) * r * 0.45, r * 0.06 + 0.2, Math.sin(i * 1.7) * r * 0.45);
+      s.rotation.set(i, i * 2, 0);
+      g.add(s);
+    }
+  },
+  book(g, r) {
+    const hut = new THREE.Group();
+    hut.add(box(2.2, 1.6, 1.8, PALE, 0, 0.8, 0));
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.0, 4), mat('#b05a3c'));
+    roof.position.y = 2.1;
+    roof.rotation.y = Math.PI / 4;
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9), DARK);
+    door.position.set(0, 0.45, 0.91);
+    hut.add(roof, door);
+    for (let i = 0; i < 6; i++) hut.add(box(0.36, 0.08, 0.26, mat(['#4e8fa3', '#f2c14e', '#6f9a62'][i % 3]), 1.5, 0.04 + i * 0.08, 0.6));
+    hut.position.y = r * 0.06;
+    g.add(hut);
+  },
 };
 
 // Scaffolding around a build that is still going up, with a stack of logs beside it.
@@ -125,7 +198,7 @@ function scaffold(height) {
   return g;
 }
 
-const HEIGHT = { bench: 1, lantern: 2.2, flowerbed: 0.5, birdhouse: 2.6, stones: 0.2, hut: 2.9, treehouse: 4.5, tower: 6 };
+const HEIGHT = { bench: 1, lantern: 2.2, flowerbed: 0.5, birdhouse: 2.6, stones: 0.2, hut: 2.9, treehouse: 4.5, tower: 6, well: 2.2, reading_nook: 2.4 };
 
 export class BuildLayer {
   constructor({ scene, tex, baseY, island }) {
@@ -146,6 +219,7 @@ export class BuildLayer {
       const l = v.land;
       const d = Math.hypot(x - l.x, z - l.z);
       if (d < l.r * 0.97) return v.group.position.y + (1 - (d / l.r) ** 2) * l.r * 0.07 - 0.05;
+      if (!v.open) continue; // no bridge yet: the island cannot be reached
       const { a, b } = v.bridge;
       const vx = b.x - a.x;
       const vz = b.z - a.z;
@@ -159,6 +233,15 @@ export class BuildLayer {
   sync(state) {
     const plots = new Map(state.plots.map((p) => [p.id, p]));
     for (const l of state.lands) if (l.risen && !this.lands.has(l.id)) this.#raise(l);
+    // resource islands float there from the start; their bridge appears once it is built
+    for (const i of state.islands ?? []) {
+      const v = this.lands.get(i.id) ?? this.#raise(i, { open: i.bridged });
+      if (i.bridged && !v.open) {
+        v.open = true;
+        v.bridgeMesh.visible = true;
+      }
+    }
+    if (state.places?.stockpile) this.#stockpile(state.places.stockpile, state.stock ?? {});
     for (const b of state.builds) {
       const view = this.sites.get(b.id) ?? this.#site(b, plots.get(b.plot));
       if (view && (view.done !== b.done || view.progress !== b.progress)) this.#shape(view, b);
@@ -213,10 +296,11 @@ export class BuildLayer {
     view.el.querySelector('small').textContent = b.done ? '' : `${b.progress} of ${b.effort}`;
   }
 
-  #raise(l) {
+  #raise(l, { open = true } = {}) {
     const { group, spots } = buildIslet({ radius: l.r, seed: l.id.length * 7 + 3, rockMat: this.rock, grassMat: this.grass });
     group.position.set(l.x, -RISE_S * 1.5, l.z);
-    for (const s of spots.slice(0, 3)) {
+    if (l.resource) DRESS[l.resource]?.(group, l.r);
+    for (const s of spots.slice(0, l.resource ? 1 : 3)) {
       const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6 + (s.x % 0.3), 0), LEAF);
       bush.position.set(s.x, s.y + 0.3, s.z);
       bush.scale.y = 0.7;
@@ -256,16 +340,46 @@ export class BuildLayer {
 
     const el = document.createElement('div');
     el.className = 'place-label';
-    el.textContent = l.name;
+    el.textContent = l.resource ? `${l.name} · ${l.resource === 'book' ? 'books' : l.resource}` : l.name;
     const label = new CSS2DObject(el);
-    label.position.set(0, 2.2, 0);
+    label.position.set(0, l.resource === 'book' ? 3.6 : 2.2, 0);
     group.add(label);
-    const age = this.seen ? 0 : RISE_S;
-    if (!this.seen) {
+    // islands are always there; only land raised by building rises while you watch
+    const age = this.seen && !l.resource ? 0 : RISE_S;
+    if (age === RISE_S) {
       group.position.y = 0;
-      bridge.visible = true;
+      bridge.visible = open;
     }
-    this.lands.set(l.id, { land: l, group, bridgeMesh: bridge, bridge: { a, b }, deckY, age });
+    const view = { land: l, group, bridgeMesh: bridge, bridge: { a, b }, deckY, age, open };
+    this.lands.set(l.id, view);
+    return view;
+  }
+
+  // The stockpile: a little crate yard with a stack of blocks per resource, as many as are stored (up to 12 shown).
+  #stockpile(p, stock) {
+    const key = JSON.stringify(stock);
+    if (key === this.stockKey) return;
+    this.stockKey = key;
+    if (!this.pile) {
+      this.pile = new THREE.Group();
+      this.pile.position.set(p.x, this.baseY(p.x, p.z), p.z);
+      for (const [x, z] of [[-1.3, -1.0], [1.3, -1.0], [-1.3, 1.0], [1.3, 1.0]]) this.pile.add(cyl(0.06, 0.07, 0.6, WOOD, x, 0.3, z, 5));
+      this.pile.add(box(2.8, 0.06, 0.06, PALE, 0, 0.55, -1.0), box(2.8, 0.06, 0.06, PALE, 0, 0.55, 1.0));
+      this.blocks = new THREE.Group();
+      this.pile.add(this.blocks);
+      this.scene.add(this.pile);
+    }
+    this.blocks.clear();
+    ['wood', 'water', 'sand', 'stone', 'book'].forEach((r, col) => {
+      const n = Math.min(12, stock[r] ?? 0);
+      const m = mat(RESOURCE_COLORS[r]);
+      for (let i = 0; i < n; i++) {
+        const b = r === 'water' ? cyl(0.13, 0.13, 0.26, m, 0, 0, 0, 8) : box(r === 'book' ? 0.3 : 0.26, r === 'book' ? 0.12 : 0.26, 0.26, m);
+        b.position.set(-1.0 + col * 0.5, 0.13 + Math.floor(i / 4) * (r === 'book' ? 0.13 : 0.27), -0.45 + (i % 4) * 0.3);
+        b.castShadow = true;
+        this.blocks.add(b);
+      }
+    });
   }
 
   // Builds grow toward their progress; new land rises out of the water, then its bridge appears.
@@ -279,7 +393,7 @@ export class BuildLayer {
       v.age = Math.min(RISE_S, v.age + dt);
       const k = v.age / RISE_S;
       v.group.position.y = -RISE_S * 1.5 * (1 - k) ** 3;
-      v.bridgeMesh.visible = k > 0.8;
+      v.bridgeMesh.visible = v.open && k > 0.8;
     }
     for (const g of this.glows) {
       g.light.intensity = night * 5;

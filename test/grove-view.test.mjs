@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
+import { stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
 import { PLACES } from '../hq/grove-world.js';
 
 test('koalas at the same place stand apart, and stand beside the pond, not in it', () => {
@@ -92,4 +92,24 @@ test('at a build site the koalas stand clear of the build, apart from each other
   const b = spotFor(places, 'plot_1', 'ruby', 'build');
   for (const s of [a, b]) assert.ok(Math.hypot(s.x - 3.4, s.z - 10.3) >= 2.2);
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 1.2);
+});
+
+test('stockText reads well, skipping empty piles', () => {
+  assert.equal(stockText({ wood: 6, sand: 1 }), '6 wood · 1 sand');
+  assert.equal(stockText({ sand: 0, stone: 2 }), '2 stone');
+  assert.equal(stockText({}), 'empty');
+  assert.equal(stockText(undefined), 'empty');
+});
+
+test('carried lists each resource unit a koala holds, in resource order', () => {
+  assert.deepEqual(carried({ res: { stone: 1, wood: 2 } }), ['wood', 'wood', 'stone']);
+  assert.deepEqual(carried({}), []);
+  for (const r of ['wood', 'water', 'sand', 'stone', 'book']) assert.match(RESOURCE_COLORS[r], /^#[0-9a-f]{6}$/);
+});
+
+test('walking to a bridged resource island crosses its bridge', () => {
+  const sandy = { id: 'sandy_shoal', x: 38, z: -6, r: 6.5 };
+  const out = landRoute({ x: 0, z: 2 }, { x: 38, z: -6 }, [sandy]);
+  assert.equal(out.length, 2);
+  assert.ok(Math.hypot(out[1].x - sandy.x, out[1].z - sandy.z) < sandy.r);
 });

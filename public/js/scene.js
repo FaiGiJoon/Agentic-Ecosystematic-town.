@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, skyAt, landRoute } from './view.js';
+import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
 import { buildTextures } from './gfx/textures.js';
 import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
@@ -524,6 +524,10 @@ export class GroveScene {
       view.grow(k.size ?? 1);
       view.place(s.x, s.y, s.z);
       view.tagEl.addEventListener('click', () => this.onPick(k.id));
+      // what the koala carries: little blocks held against its chest
+      view.carry = new THREE.Group();
+      view.carry.position.set(0, 0.95, 0.55);
+      view.rig.add(view.carry);
       this.koalas.set(k.id, view);
       this.scene.add(view.root);
     }
@@ -651,7 +655,7 @@ export class GroveScene {
 
   // The way to walk: over a bridge when it leads to or from new land, and around the pond.
   walk(from, to) {
-    const lands = (this.state?.lands ?? []).filter((l) => l.risen);
+    const lands = [...(this.state?.lands ?? []).filter((l) => l.risen), ...(this.state?.islands ?? []).filter((i) => i.bridged)];
     const over = landRoute(from, to, lands, ISLAND);
     if (!over.length) return this.route(from, to);
     return [...this.route(from, over[0]), ...over, ...this.route(over.at(-1), to)];
@@ -672,13 +676,27 @@ export class GroveScene {
       if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1 * view.size, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
       view.grow(k.size ?? 1);
       view.thinking = k.thinking;
+      this.#carry(view, carried(k));
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       const anim = animFor(k);
       view.setGoal(spot, anim, this.walk(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
-      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[anim] ?? 'sit'}`);
+      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
+  }
+
+  #carry(view, list) {
+    const key = list.join(',');
+    if (view.carryKey === key) return;
+    view.carryKey = key;
+    view.carry.clear();
+    list.slice(0, 4).forEach((r, i) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.18), new THREE.MeshStandardMaterial({ color: RESOURCE_COLORS[r], roughness: 0.8 }));
+      m.position.set((i % 2 ? 0.12 : -0.12), Math.floor(i / 2) * 0.17, 0);
+      m.castShadow = true;
+      view.carry.add(m);
+    });
   }
 
   #faceFor(k, spot) {
