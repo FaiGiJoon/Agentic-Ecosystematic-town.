@@ -10,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { Koala } from './koala.js';
 import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
+import { gradeAt } from './gfx/grade.js';
 import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
 import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
@@ -910,6 +911,7 @@ export class GroveScene {
     this.post.look({
       tint: new THREE.Color(1, 1, 1).lerp(new THREE.Color(1.07, 0.97, 0.86), tw * 0.8).lerp(new THREE.Color(0.86, 0.93, 1.06), pal.night * 0.6),
       night: pal.night,
+      grade: gradeAt(frac),
     });
     for (const b of this.blobs) b.mesh.material.opacity = 0.35 + 0.35 * day * sunUp + 0.12;
     this.sky.updateEnv(performance.now(), this.envEvery);

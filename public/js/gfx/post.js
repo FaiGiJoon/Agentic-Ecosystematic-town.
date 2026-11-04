@@ -19,10 +19,13 @@ const GradeShader = {
     uSaturation: { value: 1.03 },
     uContrast: { value: 1.07 },
     uTint: { value: new THREE.Color(1, 1, 1) },
+    uShadow: { value: new THREE.Color(1, 1, 1) },
+    uHighlight: { value: new THREE.Color(1, 1, 1) },
+    uExposure: { value: 1 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uSharpen, uVignette, uSaturation, uContrast; uniform vec3 uTint;
+    uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uSharpen, uVignette, uSaturation, uContrast, uExposure; uniform vec3 uTint, uShadow, uHighlight;
     varying vec2 vUv;
     float sstep(float a, float b, float x){ float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
     void main(){
@@ -31,8 +34,12 @@ const GradeShader = {
              + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb;
       vec3 sharp = c + (c - n * 0.25) * uSharpen;
       c = clamp(sharp, c * 0.72, c * 1.4 + 0.015); // no halos around the HDR sun
+      c *= uExposure;
       c = max((c - 0.16) * uContrast + 0.16, 0.0);
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      // split-toning: one tint for the shade, one for the light (golden hour, twilight)
+      c *= mix(uShadow, uHighlight, sstep(0.04, 0.85, l));
+      l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, uSaturation) * uTint;
       float v = sstep(1.25, 0.25, length((vUv - 0.5) * vec2(1.0, 0.9) * 1.6));
       c *= mix(1.0 - uVignette, 1.0, v);
@@ -93,11 +100,22 @@ export class Post {
   }
 
   // tint and exposure follow the time of day; bloom a little stronger in the dark
-  look({ tint, night, vignette = 0.28 }) {
+  // grade: gradeAt(frac) from grade.js — the cinematic palette for this time of day
+  look({ tint, night, vignette = 0.28, grade = null }) {
     if (!this.composer) return;
-    this.grade.uniforms.uTint.value.copy(tint);
-    this.grade.uniforms.uVignette.value = vignette + night * 0.1;
-    this.bloom.strength = 0.3 + night * 0.28;
+    const u = this.grade.uniforms;
+    u.uTint.value.copy(tint);
+    u.uVignette.value = vignette + night * 0.1;
+    if (grade) {
+      u.uShadow.value.setRGB(...grade.shadow);
+      u.uHighlight.value.setRGB(...grade.highlight);
+      u.uSaturation.value = grade.saturation;
+      u.uContrast.value = grade.contrast;
+      u.uExposure.value = grade.exposure;
+      this.bloom.strength = grade.bloom;
+    } else {
+      this.bloom.strength = 0.3 + night * 0.28;
+    }
   }
 
   render(dt) {
