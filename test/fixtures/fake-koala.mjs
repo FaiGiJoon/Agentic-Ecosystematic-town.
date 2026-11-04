@@ -47,6 +47,8 @@ function invent() {
   if (!/Your tickets still waiting/.test(prompt) && Math.random() < 0.3) {
     options.push({ action: 'file_ticket', target: '', say: pick(['We need more stone to build a bridge. Where can we find it?', 'It gets very dark at night. Could we have more lanterns?', 'My paws are always full. How can I carry more?']), mood: 'curious' });
   }
+  if (/nest \(with/.test(prompt)) options.push({ action: 'nest', target: '', say: 'Shall we make a cozy nest together?', mood: 'cozy' });
+  if (/research \(target/.test(prompt)) options.push({ action: 'research', target: pick(['How do koalas find water?', 'What do turtles eat?', 'How do you build a strong bridge?']), say: 'Let me look that up!', mood: 'curious' });
   if (hungry) options.push({ action: 'eat', target: pick(['big_gum', 'river_gum', 'blue_gum']), say: 'Munch munch.', mood: 'hungry' });
   if (tired) options.push({ action: 'nap', target: '', say: 'Just a little nap...', mood: 'sleepy' });
   if (heard) options.push({ action: 'sit', target: '', say: pick(['I heard you!', 'Yes, I think so too.', 'Really? Tell me more.']), mood: 'happy' });
@@ -61,7 +63,11 @@ function invent() {
   };
 }
 
-const decision = process.env.FAKE_DECISION ? JSON.parse(process.env.FAKE_DECISION) : invent();
+// A research call (web search is its only tool) answers with a fact and an idea instead of a decision.
+const researching = args.includes('WebSearch');
+const decision = process.env.FAKE_DECISION ? JSON.parse(process.env.FAKE_DECISION)
+  : researching ? { fact: pick(['Koalas get most of the water they need from gum leaves.', 'Turtles can pull their head into their shell to stay safe.', 'A bridge is stronger with ropes on both sides.']), idea: pick(['', 'We could build a well.', 'Let us build stepping stones to the pond.']) }
+  : invent();
 const usage = { input_tokens: 900, cache_creation_input_tokens: 0, cache_read_input_tokens: 600, output_tokens: 80 };
 const base = { type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.0021, duration_ms: 1500, usage };
 

@@ -534,7 +534,7 @@ function buildLines(world) {
     `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
     `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
     `Stockpile: ${amounts(stockOf(world))}.`,
-    `You can build (with what is in the Stockpile): ${affordable.length ? affordable.map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps, costs ${amounts(costOf(id))})`).join(', ') : 'nothing yet'}. `
+    `You can build (with what is in the Stockpile): ${affordable.length ? affordable.map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps, costs ${amounts(costOf(id))})`).join(', ') : 'nothing yet. To build anything, first gather resources and store them in the Stockpile (a bench needs 2 wood from a gum tree)'}. `
       + `Building together at the same site goes twice as fast. At most ${MAX_OPEN} things are built at once; ${free} free plot${free === 1 ? '' : 's'} left.`,
     next ? `Every ${LAND_EVERY} finished builds, new land rises from the water; next: ${next.name}.` : 'All the new land has risen.',
   ];

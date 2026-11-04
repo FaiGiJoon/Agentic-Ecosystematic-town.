@@ -115,3 +115,12 @@ test('the prompt says what can be gathered here, the stockpile, and only builds 
   assert.doesNotMatch(p, /treehouse/);
   assert.match(p, /gather \(target: a resource/);
 });
+
+test('with nothing affordable, the prompt says how to get building again', () => {
+  const w = world();
+  w.stock = {};
+  const p = buildPrompt(w, 'crystal', groveClock(0));
+  assert.match(p, /To build anything, first gather resources and store them in the Stockpile/);
+  w.stock = { wood: 9 };
+  assert.doesNotMatch(buildPrompt(w, 'crystal', groveClock(0)), /To build anything, first gather/);
+});
