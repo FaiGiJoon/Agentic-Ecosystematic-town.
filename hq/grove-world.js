@@ -52,6 +52,16 @@ export const PLACES = {
 };
 
 export const ITEMS = ['leaf', 'blossom', 'pebble', 'ball', 'feather'];
+
+// Little things the koalas may notice: the critters the page draws, seen now and then.
+export const SIGHTINGS = [
+  'A turtle plodded slowly past the pond.',
+  'A frog hopped out of the reeds and plopped into the pond.',
+  'A kookaburra laughed from the top of a gum tree.',
+  'Two little birds chased each other around the River Gum.',
+  'A turtle poked its head out of its shell and blinked at you.',
+  'A frog croaked somewhere near the lily pads.',
+];
 export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
@@ -89,6 +99,9 @@ export const MOODS = ['happy', 'playful', 'sleepy', 'hungry', 'curious', 'cozy',
 const TOYS = { ball: 'clearing', swing: 'swing', pond: 'pond' };
 const TREES = Object.keys(PLACES).filter((id) => PLACES[id].tree);
 const MAX_RECENT = 10;
+// The prompt shows only the newest of these, to keep each decision cheap.
+const PROMPT_RECENT = 6;
+const PROMPT_MEMORIES = 8;
 const MAX_MEMORIES = 12;
 const MAX_ITEMS = 4;
 export { MAX_ITEMS };
@@ -500,10 +513,10 @@ export function buildPrompt(world, id, clock) {
     `How you feel about ${f.name}: ${k.bond} (from -100 to 100). ${k.opinion ? `You think: "${k.opinion}"` : 'You have no firm opinion yet.'}`,
     '',
     'Things you remember:',
-    ...(k.memories.length ? k.memories.map((m) => `- ${m}`) : ['- nothing yet']),
+    ...(k.memories.length ? k.memories.slice(-PROMPT_MEMORIES).map((m) => `- ${m}`) : ['- nothing yet']),
     '',
     'What happened just now (oldest first):',
-    ...(k.recent.length ? k.recent.map((r) => `- ${r}`) : ['- nothing yet']),
+    ...(k.recent.length ? k.recent.slice(-PROMPT_RECENT).map((r) => `- ${r}`) : ['- nothing yet']),
     '',
     `Places: ${Object.keys(places).map(place).join(', ')}. Eucalyptus grows on: ${TREES.join(', ')}.`,
     ...buildLines(world),

@@ -6,9 +6,10 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, RENAMED, migrateNames, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
+import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
 
 export const GROVE_DEFAULTS = {
   model: 'claude-haiku-5-5',
@@ -18,7 +19,9 @@ export const GROVE_DEFAULTS = {
   workDir: null,
   timeoutMs: 60000,
   minMs: 20000, // a koala thinks every 20-60 s on its own...
+  idleMinMs: 40000, // ...40-90 s when nothing has happened to it since it last decided...
   maxMs: 60000,
+  idleMaxMs: 90000,
   replyMinMs: 6000, // ...sooner when spoken to or given something
   replyMaxMs: 12000,
   gapMs: 12000, // never two decisions of one koala closer than this
@@ -49,7 +52,8 @@ export class Grove {
   #listeners = [];
   #timer = null;
   #inflight = new Set();
-  #run = {}; // per koala: nextAt, thinking, lastStart, replyDue
+  #run = {}; // per koala: nextAt, thinking, lastStart, replyDue, stirred, calm
+  #lastHour = null;
   #heartbeatAt = 0;
   #lastDrift = 0;
   #wasPresent = false;
@@ -96,6 +100,7 @@ export class Grove {
       this.#run[k.id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
     }
     this.world.builds = this.#meta('builds', []);
+    this.world.stock = this.#meta('stock', { ...START_STOCK });
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
     if (this.playing) this.#schedule();
   }
@@ -191,6 +196,7 @@ export class Grove {
   // Something happened to this koala: let it react soon, but not sooner than the gap allows.
   #nudge(id) {
     const r = this.#run[id];
+    r.stirred = true;
     if (r.thinking) {
       r.replyDue = true;
       return;
@@ -211,6 +217,7 @@ export class Grove {
       }
     }
     this.#lastDrift = now;
+    if (active) this.#sightings();
     if (present !== this.#wasPresent) {
       this.#wasPresent = present;
       this.#emit();
@@ -222,8 +229,26 @@ export class Grove {
     }
   }
 
+  // Once a grove hour, each koala may notice one of the critters.
+  #sightings() {
+    const c = this.clock();
+    const hour = c.day * 24 + c.hour;
+    if (this.#lastHour === null) this.#lastHour = hour;
+    if (hour === this.#lastHour) return;
+    this.#lastHour = hour;
+    for (const k of KOALAS) {
+      if (this.rng() >= 0.15) continue;
+      const koala = this.world.koalas[k.id];
+      koala.recent.push(SIGHTINGS[Math.floor(this.rng() * SIGHTINGS.length)]);
+      if (koala.recent.length > 10) koala.recent.splice(0, koala.recent.length - 10);
+      this.#save(k.id);
+    }
+  }
+
   #decide(id) {
     const r = this.#run[id];
+    r.calm = !r.stirred;
+    r.stirred = false;
     r.thinking = true;
     r.replyDue = false;
     r.lastStart = this.now();
@@ -266,9 +291,11 @@ export class Grove {
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
     for (const other of KOALAS) this.#save(other.id);
     this.#setMeta('builds', this.world.builds);
+    this.#setMeta('stock', this.world.stock);
     const friend = KOALAS.find((x) => x.id !== id).id;
     if (decision.say || decision.action === 'give' || decision.action === 'approach') this.#nudge(friend);
-    let next = this.now() + this.#between(this.config.minMs, this.config.maxMs);
+    const quiet = r.calm && !decision.say && !r.replyDue;
+    let next = this.now() + (quiet ? this.#between(this.config.idleMinMs, this.config.idleMaxMs) : this.#between(this.config.minMs, this.config.maxMs));
     if (r.replyDue) next = Math.min(next, Math.max(this.now() + this.#between(this.config.replyMinMs, this.config.replyMaxMs), r.lastStart + this.config.gapMs));
     r.nextAt = next;
     r.replyDue = false;
@@ -283,7 +310,9 @@ export class Grove {
     this.#setMeta('playing', true);
     this.#setMeta('pausedReason', null);
     this.#failures = 0;
+    this.#lastHour = null;
     this.#schedule();
+    this.#sightings(); // starts the hour count
     this.#emit();
     return this.state();
   }
@@ -334,7 +363,7 @@ export class Grove {
     if (!k || !Object.hasOwn(this.world.koalas, koala)) throw new GroveError(404, 'no such koala');
     if (kind === 'give') {
       if (!ITEMS.includes(item)) throw new GroveError(400, `item must be one of: ${ITEMS.join(', ')}`);
-      if (k.inventory.length >= carryLimit(k.strength)) throw new GroveError(409, `${k.name}'s paws are full`);
+      if (held(k) >= carryLimit(k.strength)) throw new GroveError(409, `${k.name}'s paws are full`);
       k.inventory.push(item);
       k.recent.push(`The visitor gave you a ${item}.`);
       this.#log({ koala, kind: 'visitor', text: `You gave ${k.name} a ${item}`, action: 'give', target: item });
@@ -400,6 +429,10 @@ export class Grove {
       blueprints: BLUEPRINTS,
       plots: PLOTS,
       lands: LANDS.map((l) => ({ ...l, risen: landOf(this.world).includes(l) })),
+      stock: stockOf(this.world),
+      resources: RESOURCES,
+      costs: COSTS,
+      islands: ISLANDS.map((i) => ({ ...i, bridged: bridged(this.world).has(i.id) })),
       koalas: KOALAS.map((k) => ({
         ...this.world.koalas[k.id],
         ...growthOf(this.world.koalas[k.id]),

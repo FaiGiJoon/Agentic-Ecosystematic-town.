@@ -251,3 +251,16 @@ test('a baby cannot be handed more than it can carry', () => {
   assert.deepEqual(b.inventory, ['pebble', 'ball'], 'paws full: the leaf stays out');
   assert.equal(carryLimit(70), 4);
 });
+
+test('prompts stay short: recent memories and events are trimmed', () => {
+  const w = world();
+  const k = w.koalas.crystal;
+  k.recent = Array.from({ length: 10 }, (_, i) => `event ${i}`);
+  k.memories = Array.from({ length: 12 }, (_, i) => `memory ${i}`);
+  const p = buildPrompt(w, 'crystal', groveClock(0));
+  assert.doesNotMatch(p, /- event 3\n/);
+  assert.match(p, /- event 4\n/);
+  assert.doesNotMatch(p, /- memory 3\n/);
+  assert.match(p, /- memory 4\n/);
+  assert.ok(p.length < 3200, `prompt is ${p.length} characters`);
+});

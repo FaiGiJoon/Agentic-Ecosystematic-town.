@@ -4,18 +4,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Grove } from '../hq/grove.js';
+import { SIGHTINGS } from '../hq/grove-world.js';
 
 const USAGE = { cost_usd: 0.002, tokens_in: 1500, tokens_out: 80, duration_ms: 900 };
 
 // A grove with a clock we move by hand and a scripted brain.
-function setup({ config = {}, decide, path: dbPath } = {}) {
+function setup({ config = {}, decide, path: dbPath, rng = () => 0.5 } = {}) {
   let t = Date.UTC(2026, 9, 31, 12);
   const calls = [];
   const brain = async ({ koala, system, prompt }) => {
     calls.push({ koala, system, prompt });
     return decide ? decide(koala, calls.length) : { ok: true, raw: { action: 'sit', say: '', mood: 'content' }, usage: USAGE };
   };
-  const grove = new Grove({ path: dbPath, config: { dayUsd: 1, ...config }, think: brain, now: () => t, rng: () => 0.5 });
+  const grove = new Grove({ path: dbPath, config: { dayUsd: 1, ...config }, think: brain, now: () => t, rng });
   return { grove, calls, advance: (ms) => (t += ms), now: () => t };
 }
 
@@ -251,4 +252,52 @@ test('builds are shared by both koalas, sent to the page, and survive a restart'
   assert.equal(s.builds[0].progress, 3);
   assert.equal(s.koalas[0].place, s.builds[0].plot);
   b.grove.close();
+});
+
+test('the stockpile starts at 4 wood and survives a restart', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grove-stock-'));
+  const file = path.join(dir, 'grove.sqlite');
+  const plan = ['gather', 'store'];
+  const a = setup({ path: file, decide: (k) => ({ ok: true, raw: k === 'crystal' ? { action: plan.shift() ?? 'sit', target: 'wood' } : { action: 'sit' }, usage: USAGE }) });
+  assert.deepEqual(a.grove.state().stock, { wood: 4 });
+  assert.equal(a.grove.state().islands.length, 4);
+  assert.equal(a.grove.state().islands[0].bridged, false);
+  a.grove.world.koalas.crystal.place = 'big_gum';
+  a.grove.play();
+  for (let i = 0; i < 2; i++) await openRound(a.grove, a.advance, 70000);
+  assert.deepEqual(a.grove.state().stock, { wood: 5 });
+  a.grove.close();
+  const b = setup({ path: file });
+  assert.deepEqual(b.grove.state().stock, { wood: 5 });
+  b.grove.close();
+});
+
+test('giving the koala something counts the resources it already carries', () => {
+  const { grove } = setup();
+  grove.world.koalas.ruby.res = { wood: 2 }; // a baby holds 2 things
+  const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
+  assert.equal(status(() => grove.act({ koala: 'ruby', kind: 'give', item: 'leaf' })), 409);
+});
+
+test('a koala with nothing new to react to waits longer before deciding again', async () => {
+  const { grove, advance, now } = setup({ rng: () => 0 });
+  grove.play();
+  grove.heartbeat();
+  await round(grove, advance, 5000);
+  const k = grove.state().koalas.find((x) => x.id === 'crystal');
+  assert.ok(k.nextAt - now() >= 40000, `waits ${k.nextAt - now()} ms`);
+});
+
+test('now and then a koala notices a critter', async () => {
+  const seen = (rng) => {
+    const { grove, advance } = setup({ rng });
+    grove.play();
+    grove.heartbeat();
+    advance(70000);
+    grove.heartbeat();
+    grove.tick();
+    return grove.state().koalas.flatMap((k) => k.recent).filter((r) => SIGHTINGS.includes(r));
+  };
+  assert.ok(seen(() => 0.01).length > 0);
+  assert.equal(seen(() => 0.99).length, 0);
 });
