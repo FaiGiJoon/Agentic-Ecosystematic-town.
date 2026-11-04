@@ -976,10 +976,10 @@ export class GroveScene {
 
   #toys(dt, t) {
     this.seats.forEach((seat, i) => {
-      const id = i === 0 ? 'mallee' : 'bramble';
+      const id = i === 0 ? 'crystal' : 'ruby';
       const v = this.koalas.get(id);
       const on = v && v.anim === 'swing' && v.arrived;
-      const want = on ? Math.sin(t * 2.2 + (id === 'mallee' ? 0 : 1.4)) * 0.2 : 0;
+      const want = on ? Math.sin(t * 2.2 + (id === 'crystal' ? 0 : 1.4)) * 0.2 : 0;
       seat.rotation.x = damp(seat.rotation.x, want, 6, dt);
     });
     const gy = (x, z) => this.groundY(x, z);

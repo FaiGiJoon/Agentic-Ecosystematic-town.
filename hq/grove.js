@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, RENAMED, migrateNames, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 
@@ -87,6 +87,7 @@ export class Grove {
       setMeta: p('INSERT INTO grove_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
     };
 
+    this.#rename();
     // The koalas' world: themselves, and what they have built together.
     this.world = { koalas: {}, builds: [] };
     for (const k of KOALAS) {
@@ -97,6 +98,34 @@ export class Grove {
     this.world.builds = this.#meta('builds', []);
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
     if (this.playing) this.#schedule();
+  }
+
+  // A grove from before the rename: move Mallee and Bramble's rows, words and spend to Crystal and Ruby.
+  #rename() {
+    const db = this.db;
+    for (const [from, to] of Object.entries(RENAMED)) {
+      const row = this.q.koala.get(from);
+      if (!row) continue;
+      db.exec('BEGIN');
+      try {
+        if (!this.q.koala.get(to)) {
+          const k = JSON.parse(row.data);
+          for (const key of ['name', 'opinion', 'thought', 'say']) if (typeof k[key] === 'string') k[key] = migrateNames(k[key]);
+          for (const key of ['memories', 'recent']) if (Array.isArray(k[key])) k[key] = k[key].map(migrateNames);
+          k.id = to;
+          this.q.saveKoala.run(to, JSON.stringify(k));
+        }
+        db.prepare('DELETE FROM grove_koalas WHERE id = ?').run(from);
+        db.prepare('UPDATE grove_log SET koala = ? WHERE koala = ?').run(to, from);
+        db.prepare('UPDATE grove_usage SET koala = ? WHERE koala = ?').run(to, from);
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    }
+    const fix = db.prepare('UPDATE grove_log SET text = ? WHERE id = ?');
+    for (const r of db.prepare("SELECT id, text FROM grove_log WHERE text LIKE '%Mallee%' OR text LIKE '%Bramble%'").all()) fix.run(migrateNames(r.text), r.id);
   }
 
   // --- persistence helpers -----------------------------------------------------------

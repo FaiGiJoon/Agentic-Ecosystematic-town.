@@ -1,7 +1,7 @@
 // Pure helpers between the grove's server state and what the page draws.
 // No three.js or DOM here, so the tests can run them under Node.
 
-const SIDE = { mallee: -1, bramble: 1 };
+const SIDE = { crystal: -1, ruby: 1 };
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 

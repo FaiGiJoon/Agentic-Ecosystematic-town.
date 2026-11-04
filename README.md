@@ -1,6 +1,6 @@
 # Koala Grove
 
-A small 3D game and an experiment: two koalas, Mallee and Bramble, live on a floating
+A small 3D game and an experiment: two koalas, Crystal and Ruby, live on a floating
 eucalyptus island, and every move they make and every word they say is a real model decision.
 They explore, play, eat, nap, talk, remember, grow up, and build things that make their world
 bigger. You can walk around, or just watch how two AI agents get on when left to themselves.
@@ -43,8 +43,8 @@ scripts/uninstall-autostart.sh
 
 ## The koalas
 
-- **Mallee** is a bold and curious baby koala, a girl in a pink scarf, who collects shiny pebbles
-  and wants to look brave. **Bramble** is a gentle, sleepy baby koala, a boy in a blue hat, who
+- **Crystal** is a bold and curious baby koala, a girl in a pink scarf, who collects shiny pebbles
+  and wants to look brave. **Ruby** is a gentle, sleepy baby koala, a boy in a blue hat, who
   loves eucalyptus and naps and is slow to trust.
 - They eat at three gum trees, climb, nap in the mossy hollow, play on the rope swing, with the
   ball or in the pond, visit the lookout rock, talk, give each other things, remember, and build.

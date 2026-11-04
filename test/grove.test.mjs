@@ -43,8 +43,8 @@ test('starts paused: nothing thinks until Play is pressed and the page is open',
   assert.equal(calls.length, 0, 'no page has checked in');
   grove.heartbeat();
   await round(grove, advance, 5000);
-  assert.deepEqual(calls.map((c) => c.koala).sort(), ['bramble', 'mallee']);
-  assert.match(calls[0].system, /You are (Mallee|Bramble)/);
+  assert.deepEqual(calls.map((c) => c.koala).sort(), ['crystal', 'ruby']);
+  assert.match(calls[0].system, /You are (Crystal|Ruby)/);
 });
 
 test('the page must keep checking in: 45 s without a heartbeat stops the thinking', async () => {
@@ -60,7 +60,7 @@ test('the page must keep checking in: 45 s without a heartbeat stops the thinkin
 
 test('a decision moves the koala, is logged, and nudges the friend to answer', async () => {
   const { grove, advance, now } = setup({
-    decide: (k) => (k === 'mallee'
+    decide: (k) => (k === 'crystal'
       ? { ok: true, raw: { thought: 'pond time', action: 'move', target: 'pond', say: 'Come swim!', mood: 'playful', bond: 1 }, usage: USAGE }
       : { ok: true, raw: { action: 'nap', mood: 'sleepy' }, usage: USAGE }),
   });
@@ -68,12 +68,12 @@ test('a decision moves the koala, is logged, and nudges the friend to answer', a
   grove.heartbeat();
   await round(grove, advance, 5000);
   const s = grove.state();
-  const m = s.koalas.find((k) => k.id === 'mallee');
+  const m = s.koalas.find((k) => k.id === 'crystal');
   assert.equal(m.place, 'pond');
   assert.equal(m.thought, 'pond time');
   assert.ok(s.log.some((e) => e.kind === 'say' && e.text === 'Come swim!'));
-  const b = s.koalas.find((k) => k.id === 'bramble');
-  assert.ok(b.nextAt <= now() + 12000, 'Bramble will answer soon');
+  const b = s.koalas.find((k) => k.id === 'ruby');
+  assert.ok(b.nextAt <= now() + 12000, 'Ruby will answer soon');
   assert.equal(b.activity, 'nap');
 });
 
@@ -86,8 +86,8 @@ test('real usage is metered per koala and in total', async () => {
   assert.equal(u.today.calls, 2);
   assert.ok(Math.abs(u.today.cost - 0.004) < 1e-9);
   assert.equal(u.today.tokens_in, 3000);
-  assert.equal(u.byKoala.mallee.today.tokens_out, 80);
-  assert.equal(u.byKoala.bramble.total.calls, 1);
+  assert.equal(u.byKoala.crystal.today.tokens_out, 80);
+  assert.equal(u.byKoala.ruby.total.calls, 1);
   assert.equal(u.model, 'claude-haiku-5-5');
 });
 
@@ -153,42 +153,42 @@ test('a reply that is not a decision counts as a failure', async () => {
 
 test('the visitor can give, say and pet; bad requests are refused', () => {
   const { grove } = setup();
-  grove.act({ koala: 'bramble', kind: 'give', item: 'leaf' });
-  const b = () => grove.state().koalas.find((k) => k.id === 'bramble');
+  grove.act({ koala: 'ruby', kind: 'give', item: 'leaf' });
+  const b = () => grove.state().koalas.find((k) => k.id === 'ruby');
   assert.deepEqual(b().inventory, ['leaf']);
-  grove.act({ koala: 'bramble', kind: 'say', text: 'Hello Bramble!' });
-  grove.act({ koala: 'bramble', kind: 'pet' });
+  grove.act({ koala: 'ruby', kind: 'say', text: 'Hello Ruby!' });
+  grove.act({ koala: 'ruby', kind: 'pet' });
   const log = grove.state().log;
-  assert.ok(log.some((e) => e.kind === 'visitor' && /Hello Bramble!/.test(e.text)));
-  grove.act({ koala: 'bramble', kind: 'give', item: 'ball' });
+  assert.ok(log.some((e) => e.kind === 'visitor' && /Hello Ruby!/.test(e.text)));
+  grove.act({ koala: 'ruby', kind: 'give', item: 'ball' });
   const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
-  assert.equal(status(() => grove.act({ koala: 'bramble', kind: 'give', item: 'pebble' })), 409, 'a baby holds two things');
-  grove.world.koalas.bramble.strength = 80; // a strong koala holds four
-  for (const item of ['pebble', 'feather']) grove.act({ koala: 'bramble', kind: 'give', item });
-  assert.equal(status(() => grove.act({ koala: 'bramble', kind: 'give', item: 'blossom' })), 409);
+  assert.equal(status(() => grove.act({ koala: 'ruby', kind: 'give', item: 'pebble' })), 409, 'a baby holds two things');
+  grove.world.koalas.ruby.strength = 80; // a strong koala holds four
+  for (const item of ['pebble', 'feather']) grove.act({ koala: 'ruby', kind: 'give', item });
+  assert.equal(status(() => grove.act({ koala: 'ruby', kind: 'give', item: 'blossom' })), 409);
   assert.equal(status(() => grove.act({ koala: 'drop-bear', kind: 'pet' })), 404);
-  assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'dance' })), 400);
-  assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'give', item: 'diamond' })), 400);
-  assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'say', text: '' })), 400);
-  assert.equal(status(() => grove.act({ koala: 'mallee', kind: 'say', text: 'x'.repeat(141) })), 400);
+  assert.equal(status(() => grove.act({ koala: 'crystal', kind: 'dance' })), 400);
+  assert.equal(status(() => grove.act({ koala: 'crystal', kind: 'give', item: 'diamond' })), 400);
+  assert.equal(status(() => grove.act({ koala: 'crystal', kind: 'say', text: '' })), 400);
+  assert.equal(status(() => grove.act({ koala: 'crystal', kind: 'say', text: 'x'.repeat(141) })), 400);
 });
 
 test('the state says how grown each koala is,', () => {
   const { grove } = setup();
-  const [mallee, bramble] = grove.state().koalas;
-  assert.deepEqual([mallee.gender, mallee.stage, mallee.carry], ['girl', 'baby', 2]);
-  assert.deepEqual([bramble.gender, bramble.outfit], ['boy', 'a small blue hat']);
-  assert.ok(mallee.size < 0.6 && mallee.reach < 0.4 && mallee.strength === 5);
-  assert.deepEqual(mallee.nextStage, { label: 'Joey', at: 20 });
+  const [crystal, ruby] = grove.state().koalas;
+  assert.deepEqual([crystal.gender, crystal.stage, crystal.carry], ['girl', 'baby', 2]);
+  assert.deepEqual([ruby.gender, ruby.outfit], ['boy', 'a small blue hat']);
+  assert.ok(crystal.size < 0.6 && crystal.reach < 0.4 && crystal.strength === 5);
+  assert.deepEqual(crystal.nextStage, { label: 'Joey', at: 20 });
 });
 
 test('what the visitor did reaches the koala\'s next prompt', async () => {
   const { grove, calls, advance } = setup();
-  grove.act({ koala: 'mallee', kind: 'say', text: 'Do you like frogs?' });
+  grove.act({ koala: 'crystal', kind: 'say', text: 'Do you like frogs?' });
   grove.play();
   grove.heartbeat();
   await round(grove, advance, 5000);
-  const p = calls.find((c) => c.koala === 'mallee').prompt;
+  const p = calls.find((c) => c.koala === 'crystal').prompt;
   assert.match(p, /The visitor said: "Do you like frogs\?"/);
 });
 
@@ -227,7 +227,7 @@ test('the visitor can set the time of day; the day count never goes back', async
   grove.play();
   grove.heartbeat();
   await round(grove, advance, 5000);
-  const p = calls.find((c) => c.koala === 'mallee').prompt;
+  const p = calls.find((c) => c.koala === 'crystal').prompt;
   assert.match(p, /Day 2 · 18:3/);
   assert.match(p, /evening/i);
 });

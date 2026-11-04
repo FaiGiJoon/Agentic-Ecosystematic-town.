@@ -12,7 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'grove-brain-'));
 
 function run(mode, extra = {}) {
   process.env.FAKE_MODE = mode;
-  return think({ bin: FAKE, args: koalaArgs({ system: 'You are Mallee', prompt: 'hi', model: 'claude-haiku-5-5', callUsd: 0.05 }), cwd: tmp, timeoutMs: 5000, ...extra });
+  return think({ bin: FAKE, args: koalaArgs({ system: 'You are Crystal', prompt: 'hi', model: 'claude-haiku-5-5', callUsd: 0.05 }), cwd: tmp, timeoutMs: 5000, ...extra });
 }
 
 test('koalaArgs: isolated, no tools, cheap model, budget, structured JSON', () => {

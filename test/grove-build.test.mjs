@@ -38,7 +38,7 @@ test('building plots sit on open ground: on the island, clear of every place and
 
 test('parseDecision keeps a known blueprint and a short name; anything else just keeps building', () => {
   const w = world();
-  const k = w.koalas.mallee;
+  const k = w.koalas.crystal;
   const d = parseDecision({ action: 'build', target: 'treehouse', build_name: '  Sky Nest  '.padEnd(80, '!') }, k, placesOf(w));
   assert.equal(d.target, 'treehouse');
   assert.equal(d.buildName.length, 40);
@@ -47,45 +47,45 @@ test('parseDecision keeps a known blueprint and a short name; anything else just
 
 test('a koala starts a project on a free plot and walks there', () => {
   const w = world();
-  const log = build(w, 'mallee', 'treehouse', 'Sky Nest');
+  const log = build(w, 'crystal', 'treehouse', 'Sky Nest');
   assert.equal(w.builds.length, 1);
   const b = w.builds[0];
-  assert.deepEqual([b.kind, b.title, b.progress, b.done, b.by], ['treehouse', 'Sky Nest', 1, false, 'mallee']);
-  assert.equal(w.koalas.mallee.place, b.plot);
-  assert.equal(w.koalas.mallee.activity, 'build');
+  assert.deepEqual([b.kind, b.title, b.progress, b.done, b.by], ['treehouse', 'Sky Nest', 1, false, 'crystal']);
+  assert.equal(w.koalas.crystal.place, b.plot);
+  assert.equal(w.koalas.crystal.activity, 'build');
   assert.ok(placesOf(w)[b.plot], 'the site is a place');
   assert.match(placesOf(w)[b.plot].name, /Sky Nest/);
   assert.ok(log.some((e) => e.kind === 'act' && /started building/.test(e.text)));
   // Without a name, the blueprint's own name is used.
-  build(w, 'bramble', 'bench');
+  build(w, 'ruby', 'bench');
   assert.equal(w.builds[1].title, 'Log Bench');
 });
 
 test('building together goes faster, and a finished build becomes a place to visit', () => {
   const w = world();
-  build(w, 'mallee', 'hut', 'Leafy Home'); // effort 5: 1
-  build(w, 'bramble', 'hut'); // helps, Mallee is building there: 1 + 1
+  build(w, 'crystal', 'hut', 'Leafy Home'); // effort 5: 1
+  build(w, 'ruby', 'hut'); // helps, Crystal is building there: 1 + 1
   assert.equal(w.builds[0].progress, 3);
-  assert.deepEqual(w.builds[0].helpers.sort(), ['bramble', 'mallee']);
-  assert.match(w.koalas.mallee.recent.at(-1), /Bramble helped/);
-  const log = build(w, 'mallee', 'hut'); // 3 + 2 = 5: done
+  assert.deepEqual(w.builds[0].helpers.sort(), ['crystal', 'ruby']);
+  assert.match(w.koalas.crystal.recent.at(-1), /Ruby helped/);
+  const log = build(w, 'crystal', 'hut'); // 3 + 2 = 5: done
   assert.equal(w.builds[0].done, true);
   assert.ok(log.some((e) => e.kind === 'built' && /Leafy Home/.test(e.text)));
-  assert.match(w.koalas.bramble.recent.join(' '), /finished the Leafy Home/);
+  assert.match(w.koalas.ruby.recent.join(' '), /finished the Leafy Home/);
   // A finished build is somewhere to go.
   const plot = w.builds[0].plot;
-  assert.equal(parseDecision({ action: 'move', target: plot }, w.koalas.bramble, placesOf(w)).target, plot);
+  assert.equal(parseDecision({ action: 'move', target: plot }, w.koalas.ruby, placesOf(w)).target, plot);
 });
 
 test('at most two open projects: a third idea goes to the oldest one', () => {
   const w = world();
-  build(w, 'mallee', 'tower');
-  build(w, 'bramble', 'birdhouse');
-  build(w, 'mallee', 'lantern');
+  build(w, 'crystal', 'tower');
+  build(w, 'ruby', 'birdhouse');
+  build(w, 'crystal', 'lantern');
   assert.equal(w.builds.length, 2);
   assert.equal(w.builds[0].progress, 2);
   // An empty target keeps working on the koala's own project.
-  build(w, 'bramble', '');
+  build(w, 'ruby', '');
   assert.equal(w.builds[1].progress, 2);
 });
 
@@ -93,35 +93,35 @@ test('every two finished builds, new land rises from the water with room to buil
   const w = world();
   assert.equal(landOf(w).length, 0);
   const before = freePlots(w).length;
-  while (!w.builds.find((b) => b.kind === 'bench')?.done) build(w, 'mallee', 'bench');
+  while (!w.builds.find((b) => b.kind === 'bench')?.done) build(w, 'crystal', 'bench');
   const log = [];
-  while (!w.builds.find((b) => b.kind === 'lantern')?.done) log.push(...build(w, 'mallee', 'lantern'));
+  while (!w.builds.find((b) => b.kind === 'lantern')?.done) log.push(...build(w, 'crystal', 'lantern'));
   assert.equal(landOf(w).length, 1);
   const land = landOf(w)[0];
   assert.ok(log.some((e) => e.kind === 'land' && e.text.includes(land.name)));
   assert.ok(placesOf(w)[land.id], 'the new land is a place');
-  assert.match(w.koalas.bramble.recent.join(' '), new RegExp(land.name));
+  assert.match(w.koalas.ruby.recent.join(' '), new RegExp(land.name));
   assert.equal(freePlots(w).length, before - 2 + PLOTS.filter((p) => p.land === land.id).length);
   // Land that has not risen yet is not somewhere to go.
   const later = LANDS[1];
-  assert.equal(parseDecision({ action: 'move', target: later.id }, w.koalas.mallee, placesOf(w)).target, w.koalas.mallee.place);
+  assert.equal(parseDecision({ action: 'move', target: later.id }, w.koalas.crystal, placesOf(w)).target, w.koalas.crystal.place);
 });
 
 test('with no free plot and nothing open, a koala cannot build and sits instead', () => {
   const w = world();
-  w.builds = PLOTS.filter((p) => !p.land).map((p, i) => ({ id: i + 1, kind: 'bench', title: 'Bench', plot: p.id, progress: 2, effort: 2, done: true, by: 'mallee', helpers: ['mallee'] }));
+  w.builds = PLOTS.filter((p) => !p.land).map((p, i) => ({ id: i + 1, kind: 'bench', title: 'Bench', plot: p.id, progress: 2, effort: 2, done: true, by: 'crystal', helpers: ['crystal'] }));
   // Enough builds to raise every land: fill those plots too.
-  for (const p of PLOTS.filter((x) => x.land)) w.builds.push({ id: w.builds.length + 1, kind: 'bench', title: 'Bench', plot: p.id, progress: 2, effort: 2, done: true, by: 'mallee', helpers: ['mallee'] });
+  for (const p of PLOTS.filter((x) => x.land)) w.builds.push({ id: w.builds.length + 1, kind: 'bench', title: 'Bench', plot: p.id, progress: 2, effort: 2, done: true, by: 'crystal', helpers: ['crystal'] });
   assert.equal(freePlots(w).length, 0);
-  build(w, 'mallee', 'hut');
-  assert.equal(w.koalas.mallee.activity, 'sit');
-  assert.match(w.koalas.mallee.recent.join(' '), /no room left to build/);
+  build(w, 'crystal', 'hut');
+  assert.equal(w.koalas.crystal.activity, 'sit');
+  assert.match(w.koalas.crystal.recent.join(' '), /no room left to build/);
 });
 
 test('the prompt tells a koala what it can build, what is underway and what stands', () => {
   const w = world();
-  build(w, 'mallee', 'treehouse', 'Sky Nest');
-  const p = buildPrompt(w, 'bramble', groveClock(0));
+  build(w, 'crystal', 'treehouse', 'Sky Nest');
+  const p = buildPrompt(w, 'ruby', groveClock(0));
   assert.match(p, /Sky Nest \(treehouse\), 1 of 6 done/);
   assert.match(p, /build \(target: one of bench, lantern/);
   assert.match(p, /plot_\d/);

@@ -4,28 +4,34 @@
 
 export const KOALAS = [
   {
-    id: 'mallee',
-    name: 'Mallee',
+    id: 'crystal',
+    name: 'Crystal',
     gender: 'girl',
     outfit: 'a pink scarf',
     color: '#b9c2c9',
     home: 'clearing',
-    persona: 'Mallee is a bold and endlessly curious baby koala, a girl (she/her) who wears a pink scarf. '
-      + 'Mallee loves exploring every corner of the grove, collects shiny pebbles, splashes at the pond, '
-      + 'talks a lot, gets bored quickly and sometimes teases. Mallee secretly wants Bramble to think she is brave.',
+    persona: 'Crystal is a bold and endlessly curious baby koala, a girl (she/her) who wears a pink scarf. '
+      + 'Crystal loves exploring every corner of the grove, collects shiny pebbles, splashes at the pond, '
+      + 'talks a lot, gets bored quickly and sometimes teases. Crystal secretly wants Ruby to think she is brave.',
   },
   {
-    id: 'bramble',
-    name: 'Bramble',
+    id: 'ruby',
+    name: 'Ruby',
     gender: 'boy',
     outfit: 'a small blue hat',
     color: '#8d8478',
     home: 'hollow',
-    persona: 'Bramble is a gentle and sleepy baby koala, a boy (he/him) who wears a small blue hat. Bramble adores '
+    persona: 'Ruby is a gentle and sleepy baby koala, a boy (he/him) who wears a small blue hat. Ruby adores '
       + 'eucalyptus, long naps in the mossy hollow and quiet company. He speaks softly and a little poetically, '
       + 'is slow to trust, notices small things, and is protective of friends once they have earned it.',
   },
 ];
+
+// The koalas used to be called Mallee and Bramble; old groves are renamed on start.
+export const RENAMED = { mallee: 'crystal', bramble: 'ruby' };
+export function migrateNames(text) {
+  return String(text ?? '').replace(/\bMallee\b/g, 'Crystal').replace(/\bBramble\b/g, 'Ruby');
+}
 
 // Grove-space coordinates (metres); the page builds the same places in 3D.
 export const PLACES = {

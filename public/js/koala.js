@@ -37,7 +37,7 @@ export class Koala {
     this.id = id;
     this.name = name;
     this.color = color;
-    this.seed = id === 'mallee' ? 0.3 : 2.1;
+    this.seed = id === 'crystal' ? 0.3 : 2.1;
     this.pos = new THREE.Vector3();
     this.goal = { x: 0, y: 0, z: 0 };
     this.path = [];
@@ -136,8 +136,8 @@ export class Koala {
     mouth.position.set(0, -0.19, 0.55);
     head.add(mouth);
 
-    // Mallee (a girl) wears a woven pink scarf; Bramble (a boy) a small blue knitted hat.
-    if (id === 'mallee') {
+    // Crystal (a girl) wears a woven pink scarf; Ruby (a boy) a small blue knitted hat.
+    if (id === 'crystal') {
       const cloth = tex ? tex.cloth.clone() : null;
       if (cloth) {
         cloth.repeat.set(7, 1);
@@ -404,7 +404,7 @@ export class Koala {
         breathe = 1 + Math.sin(s * 1.1) * 0.045;
         break;
       case 'swing': {
-        const ph = Math.sin(t * 2.2 + (this.id === 'mallee' ? 0 : 1.4));
+        const ph = Math.sin(t * 2.2 + (this.id === 'crystal' ? 0 : 1.4));
         z = ph * 0.55; y = 0.55 + (1 - Math.cos(ph)) * 0.25; pitch = -ph * 0.25;
         aL = aR = -2.9; lL = lR = -1.3 - ph * 0.5;
         earFlop = Math.abs(ph) * 0.3;

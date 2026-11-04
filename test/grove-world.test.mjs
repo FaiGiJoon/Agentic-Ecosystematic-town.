@@ -9,7 +9,7 @@ import {
 const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])) });
 
 test('two koalas with their own personas, and a grove of known places', () => {
-  assert.deepEqual(KOALAS.map((k) => k.id), ['mallee', 'bramble']);
+  assert.deepEqual(KOALAS.map((k) => k.id), ['crystal', 'ruby']);
   for (const k of KOALAS) assert.ok(k.persona.length > 40);
   for (const id of ['big_gum', 'river_gum', 'blue_gum', 'pond', 'swing', 'clearing', 'hollow', 'lookout', 'flowers']) {
     assert.ok(PLACES[id], id);
@@ -26,7 +26,7 @@ test('the decision schema names every action and mood', () => {
 });
 
 test('parseDecision accepts an object and clamps text', () => {
-  const k = newKoala('mallee');
+  const k = newKoala('crystal');
   const d = parseDecision({ thought: 'x'.repeat(500), action: 'move', target: 'pond', say: ' hi ', mood: 'playful', remember: '', bond: 9, opinion: 'nice' }, k);
   assert.equal(d.action, 'move');
   assert.equal(d.target, 'pond');
@@ -38,7 +38,7 @@ test('parseDecision accepts an object and clamps text', () => {
 });
 
 test('parseDecision finds JSON inside prose and rejects garbage', () => {
-  const k = newKoala('bramble');
+  const k = newKoala('ruby');
   const d = parseDecision('Sure! {"action":"nap","say":"","mood":"sleepy"} done', k);
   assert.equal(d.action, 'nap');
   assert.equal(parseDecision('no json here', k), null);
@@ -48,7 +48,7 @@ test('parseDecision finds JSON inside prose and rejects garbage', () => {
 });
 
 test('parseDecision repairs bad actions, targets and moods', () => {
-  const k = newKoala('mallee');
+  const k = newKoala('crystal');
   k.place = 'pond';
   assert.equal(parseDecision({ action: 'fly' }, k).action, 'sit');
   assert.equal(parseDecision({ action: 'move', target: 'mars' }, k).target, 'pond');
@@ -66,43 +66,43 @@ test('parseDecision repairs bad actions, targets and moods', () => {
 
 test('applyDecision moves, feeds, and tells the other koala what was said', () => {
   const w = world();
-  const m = w.koalas.mallee;
-  const b = w.koalas.bramble;
+  const m = w.koalas.crystal;
+  const b = w.koalas.ruby;
   m.hunger = 80;
-  const log = applyDecision(w, 'mallee', parseDecision({ action: 'eat', target: 'river_gum', say: 'Yum!', mood: 'happy', bond: 1, opinion: 'Bramble is sweet', remember: 'River gum leaves taste best' }, m));
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'eat', target: 'river_gum', say: 'Yum!', mood: 'happy', bond: 1, opinion: 'Ruby is sweet', remember: 'River gum leaves taste best' }, m));
   assert.equal(m.place, 'river_gum');
   assert.equal(m.activity, 'eat');
   assert.equal(m.hunger, 35);
   assert.equal(m.mood, 'happy');
   assert.equal(m.bond, 4);
-  assert.equal(m.opinion, 'Bramble is sweet');
+  assert.equal(m.opinion, 'Ruby is sweet');
   assert.deepEqual(m.memories, ['River gum leaves taste best']);
-  assert.match(b.recent.at(-1), /Mallee said: "Yum!"/);
+  assert.match(b.recent.at(-1), /Crystal said: "Yum!"/);
   assert.deepEqual(log.map((e) => e.kind), ['act', 'say']);
 });
 
 test('applyDecision: approach goes to the friend, give hands over the item, nap restores energy', () => {
   const w = world();
-  const m = w.koalas.mallee;
-  const b = w.koalas.bramble;
+  const m = w.koalas.crystal;
+  const b = w.koalas.ruby;
   b.place = 'lookout';
   m.inventory = ['blossom'];
-  applyDecision(w, 'mallee', parseDecision({ action: 'approach' }, m));
+  applyDecision(w, 'crystal', parseDecision({ action: 'approach' }, m));
   assert.equal(m.place, 'lookout');
-  applyDecision(w, 'mallee', parseDecision({ action: 'give', target: 'blossom' }, m));
+  applyDecision(w, 'crystal', parseDecision({ action: 'give', target: 'blossom' }, m));
   assert.deepEqual(m.inventory, []);
   assert.deepEqual(b.inventory, ['blossom']);
   assert.match(b.recent.at(-1), /gave you a blossom/);
   b.energy = 20;
-  applyDecision(w, 'bramble', parseDecision({ action: 'nap' }, b));
+  applyDecision(w, 'ruby', parseDecision({ action: 'nap' }, b));
   assert.equal(b.energy, 60);
   assert.equal(b.activity, 'nap');
 });
 
 test('memories are bounded: 10 recent events, 12 long-term notes, bond within ±100', () => {
   const w = world();
-  const m = w.koalas.mallee;
-  for (let i = 0; i < 40; i++) applyDecision(w, 'mallee', parseDecision({ action: 'sit', remember: `note ${i}`, bond: 3 }, m));
+  const m = w.koalas.crystal;
+  for (let i = 0; i < 40; i++) applyDecision(w, 'crystal', parseDecision({ action: 'sit', remember: `note ${i}`, bond: 3 }, m));
   assert.equal(m.recent.length, 10);
   assert.equal(m.memories.length, 12);
   assert.equal(m.memories.at(-1), 'note 39');
@@ -110,7 +110,7 @@ test('memories are bounded: 10 recent events, 12 long-term notes, bond within ±
 });
 
 test('drift makes koalas hungrier and sleepier; napping recovers', () => {
-  const k = newKoala('mallee');
+  const k = newKoala('crystal');
   k.hunger = 10;
   k.energy = 50;
   drift(k, 10);
@@ -138,26 +138,26 @@ test('groveClock runs a 20-minute day that starts in the morning', () => {
 
 test('the prompt carries needs, the friend, memories and the place ids', () => {
   const w = world();
-  w.koalas.mallee.recent = ['Bramble said: "hello"'];
-  w.koalas.mallee.memories = ['The pond has frogs'];
-  w.koalas.bramble.place = 'pond';
-  const p = buildPrompt(w, 'mallee', groveClock(0));
-  assert.match(p, /Bramble/);
-  assert.match(p, /Bramble said: "hello"/);
+  w.koalas.crystal.recent = ['Ruby said: "hello"'];
+  w.koalas.crystal.memories = ['The pond has frogs'];
+  w.koalas.ruby.place = 'pond';
+  const p = buildPrompt(w, 'crystal', groveClock(0));
+  assert.match(p, /Ruby/);
+  assert.match(p, /Ruby said: "hello"/);
   assert.match(p, /The pond has frogs/);
   assert.match(p, /big_gum/);
   assert.match(p, /Day 1 · 08:00/);
-  assert.match(systemPrompt('bramble'), /Bramble/);
-  assert.match(systemPrompt('bramble'), /JSON/);
+  assert.match(systemPrompt('ruby'), /Ruby/);
+  assert.match(systemPrompt('ruby'), /JSON/);
   // Memories are for what is new; otherwise every turn re-saves the same moment.
-  assert.match(systemPrompt('bramble'), /Leave remember empty unless/);
-  assert.match(buildPrompt(w, 'mallee', groveClock(0)), /Things you remember/);
+  assert.match(systemPrompt('ruby'), /Leave remember empty unless/);
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /Things you remember/);
 });
 
-test('Mallee is a girl and Bramble a boy, both told so in their prompts', () => {
-  assert.deepEqual(KOALAS.map((k) => [k.id, k.gender]), [['mallee', 'girl'], ['bramble', 'boy']]);
-  assert.match(systemPrompt('mallee'), /Bramble, a boy \(he\/him\)/);
-  assert.match(systemPrompt('bramble'), /Mallee, a girl \(she\/her\)/);
+test('Crystal is a girl and Ruby a boy, both told so in their prompts', () => {
+  assert.deepEqual(KOALAS.map((k) => [k.id, k.gender]), [['crystal', 'girl'], ['ruby', 'boy']]);
+  assert.match(systemPrompt('crystal'), /Ruby, a boy \(he\/him\)/);
+  assert.match(systemPrompt('ruby'), /Crystal, a girl \(she\/her\)/);
   assert.match(KOALAS[0].persona, /pink scarf/);
   assert.match(KOALAS[1].persona, /small blue hat/);
 });
@@ -178,7 +178,7 @@ test('both koalas start as small, weak babies', () => {
 test('growth: size, carrying and climbing reach rise with strength and top out at fully grown', () => {
   let last = { size: 0, carry: 0, reach: 0 };
   for (const s of [0, 20, 45, 75, 100]) {
-    const k = { ...newKoala('mallee'), strength: s };
+    const k = { ...newKoala('crystal'), strength: s };
     const g = growthOf(k);
     assert.ok(g.size > last.size || s === 0, `size at ${s}`);
     assert.ok(g.carry >= last.carry && g.reach >= last.reach);
@@ -194,8 +194,8 @@ test('growth: size, carrying and climbing reach rise with strength and top out a
 
 test('climbing, playing, eating and napping make a koala stronger; sitting does not', () => {
   const w = world();
-  const m = w.koalas.mallee;
-  const run = (d) => applyDecision(w, 'mallee', parseDecision(d, m));
+  const m = w.koalas.crystal;
+  const run = (d) => applyDecision(w, 'crystal', parseDecision(d, m));
   const gained = (d) => {
     const before = m.strength;
     run(d);
@@ -213,41 +213,41 @@ test('climbing, playing, eating and napping make a koala stronger; sitting does 
 
 test('a stage change is logged and remembered, once', () => {
   const w = world();
-  const m = w.koalas.mallee;
+  const m = w.koalas.crystal;
   m.strength = 19.5;
-  const log = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'big_gum' }, m));
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'climb', target: 'big_gum' }, m));
   assert.equal(growthOf(m).stage, 'joey');
   const grew = log.filter((e) => e.kind === 'grow');
   assert.equal(grew.length, 1);
-  assert.equal(grew[0].text, 'Mallee grew into a joey!');
+  assert.equal(grew[0].text, 'Crystal grew into a joey!');
   assert.match(m.recent.at(-1), /You feel stronger. You are a joey now!/);
-  assert.match(w.koalas.bramble.recent.at(-1), /Mallee has grown into a joey/);
-  const again = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'big_gum' }, m));
+  assert.match(w.koalas.ruby.recent.at(-1), /Crystal has grown into a joey/);
+  const again = applyDecision(w, 'crystal', parseDecision({ action: 'climb', target: 'big_gum' }, m));
   assert.equal(again.filter((e) => e.kind === 'grow').length, 0);
 });
 
 test('babies tire faster than grown koalas and scramble instead of climbing', () => {
   const w = world();
-  const baby = w.koalas.mallee;
-  const grown = w.koalas.bramble;
+  const baby = w.koalas.crystal;
+  const grown = w.koalas.ruby;
   grown.strength = 100;
   baby.energy = grown.energy = 80;
-  applyDecision(w, 'mallee', parseDecision({ action: 'play', target: 'ball' }, baby));
-  applyDecision(w, 'bramble', parseDecision({ action: 'play', target: 'ball' }, grown));
+  applyDecision(w, 'crystal', parseDecision({ action: 'play', target: 'ball' }, baby));
+  applyDecision(w, 'ruby', parseDecision({ action: 'play', target: 'ball' }, grown));
   assert.ok(80 - baby.energy > 80 - grown.energy, `${baby.energy} vs ${grown.energy}`);
-  const log = applyDecision(w, 'mallee', parseDecision({ action: 'climb', target: 'river_gum' }, baby));
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'climb', target: 'river_gum' }, baby));
   assert.match(log[0].text, /scrambled a little way up the River Gum/);
-  const big = applyDecision(w, 'bramble', parseDecision({ action: 'climb', target: 'river_gum' }, grown));
+  const big = applyDecision(w, 'ruby', parseDecision({ action: 'climb', target: 'river_gum' }, grown));
   assert.match(big[0].text, /climbed the River Gum/);
 });
 
 test('a baby cannot be handed more than it can carry', () => {
   const w = world();
-  const m = w.koalas.mallee;
-  const b = w.koalas.bramble;
+  const m = w.koalas.crystal;
+  const b = w.koalas.ruby;
   m.inventory = ['leaf'];
   b.inventory = ['pebble', 'ball'];
-  applyDecision(w, 'mallee', parseDecision({ action: 'give', target: 'leaf' }, m));
+  applyDecision(w, 'crystal', parseDecision({ action: 'give', target: 'leaf' }, m));
   assert.deepEqual(b.inventory, ['pebble', 'ball'], 'paws full: the leaf stays out');
   assert.equal(carryLimit(70), 4);
 });
