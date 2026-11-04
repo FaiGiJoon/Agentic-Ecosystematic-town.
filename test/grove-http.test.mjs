@@ -141,3 +141,13 @@ test('POST /api/grove/name names a newborn; anyone older is 409; bad names 400',
   assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'Sky' }, { 'content-type': 'text/plain' })).status, 415);
   grove.pause();
 });
+
+test('ticket routes: reply and close need JSON from this origin; unknown ids 404; long text 400', async () => {
+  const t = grove.tickets.open('crystal', 'We need more water');
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'The pond has plenty!' })).status, 200);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'x'.repeat(301) })).status, 400);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'hi' }, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await post('/api/grove/tickets/999/reply', { text: 'hi' })).status, 404);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/close`)).status, 200);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/close`, {}, { 'content-type': 'text/plain' })).status, 415);
+});

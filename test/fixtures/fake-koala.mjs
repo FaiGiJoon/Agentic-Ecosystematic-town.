@@ -44,6 +44,9 @@ function invent() {
     const keepGoing = () => ({ action: 'build', target: '', build_name: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
     options.push(build(), underway ? keepGoing() : build(), underway ? keepGoing() : build());
   }
+  if (!/Your tickets still waiting/.test(prompt) && Math.random() < 0.3) {
+    options.push({ action: 'file_ticket', target: '', say: pick(['We need more stone to build a bridge. Where can we find it?', 'It gets very dark at night. Could we have more lanterns?', 'My paws are always full. How can I carry more?']), mood: 'curious' });
+  }
   if (hungry) options.push({ action: 'eat', target: pick(['big_gum', 'river_gum', 'blue_gum']), say: 'Munch munch.', mood: 'hungry' });
   if (tired) options.push({ action: 'nap', target: '', say: 'Just a little nap...', mood: 'sleepy' });
   if (heard) options.push({ action: 'sit', target: '', say: pick(['I heard you!', 'Yes, I think so too.', 'Really? Tell me more.']), mood: 'happy' });

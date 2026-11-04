@@ -119,6 +119,13 @@ export function createApp({ grove, publicDir }) {
         const body = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.act(body)));
       }
+      const ticket = /^\/api\/grove\/tickets\/(\d+)\/(reply|close)$/.exec(pathname);
+      if (ticket) {
+        const tid = Number(ticket[1]);
+        if (ticket[2] === 'close') return sendJson(res, 200, refuse(() => grove.closeTicket(tid)));
+        const { text } = await readJson(req);
+        return sendJson(res, 200, refuse(() => grove.replyTicket(tid, text)));
+      }
       if (pathname === '/api/grove/name') {
         const { koala, name } = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.nameKoala(koala, name)));

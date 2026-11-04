@@ -11,6 +11,7 @@ import {
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
 import { BABY_NAMES, bornBaby, graduates } from './grove-family.js';
+import { Tickets, MAX_OPEN_TICKETS } from './grove-tickets.js';
 
 export const GROVE_DEFAULTS = {
   model: 'claude-haiku-5-5',
@@ -94,6 +95,7 @@ export class Grove {
     };
 
     this.#rename();
+    this.tickets = new Tickets(db);
     // The koalas' world: themselves, and what they have built together.
     this.world = { koalas: {}, builds: [] };
     for (const k of KOALAS) {
@@ -107,6 +109,7 @@ export class Grove {
     this.world.stock = this.#meta('stock', { ...START_STOCK });
     this.world.baby = this.#meta('baby', null);
     this.world.nest = this.#meta('nest', null);
+    this.world.tickets = this.tickets.list();
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
     if (this.playing) this.#schedule();
   }
@@ -290,6 +293,48 @@ export class Grove {
     }
   }
 
+  // A koala writes a ticket (its say is the text); at most three wait at once.
+  #fileTicket(id, decision) {
+    const k = this.world.koalas[id];
+    if (!decision.say) {
+      decision.action = 'sit';
+    } else if (this.tickets.openCount(id) >= MAX_OPEN_TICKETS) {
+      k.recent.push('You wanted to write another ticket, but three of yours are already waiting for answers from the visitor.');
+      decision.action = 'sit';
+    } else {
+      const t = this.tickets.open(id, decision.say);
+      this.#log({ koala: id, kind: 'ticket', text: `${k.name} filed a ticket: ${t.title}` });
+    }
+    this.world.tickets = this.tickets.list();
+  }
+
+  replyTicket(ticketId, text) {
+    const t = this.tickets.get(ticketId);
+    if (!t) throw new GroveError(404, 'no such ticket');
+    const reply = typeof text === 'string' ? text.trim() : '';
+    if (!reply || reply.length > 300) throw new GroveError(400, 'a reply is 1 to 300 characters');
+    this.tickets.reply(ticketId, reply);
+    const k = this.world.koalas[t.koala];
+    if (k) {
+      k.recent.push(`The visitor answered your ticket: "${reply}"`);
+      if (k.recent.length > 10) k.recent.splice(0, k.recent.length - 10);
+      this.#save(k.id);
+      if (!k.follows) this.#nudge(k.id);
+    }
+    this.#log({ koala: t.koala, kind: 'visitor', text: `You answered ${k?.name ?? 'a koala'}'s ticket: "${reply}"`, action: 'reply' });
+    this.world.tickets = this.tickets.list();
+    this.#emit();
+    return this.state();
+  }
+
+  closeTicket(ticketId) {
+    if (!this.tickets.get(ticketId)) throw new GroveError(404, 'no such ticket');
+    this.tickets.close(ticketId);
+    this.world.tickets = this.tickets.list();
+    this.#emit();
+    return this.state();
+  }
+
   // The visitor names a newborn (within its first grove day).
   nameKoala(id, name) {
     const k = this.world.koalas[id];
@@ -366,6 +411,7 @@ export class Grove {
     }
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
+    if (decision.action === 'file_ticket') this.#fileTicket(id, decision);
     this.world.minute = this.#minute();
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
     this.#setMeta('baby', this.world.baby ?? null);
@@ -521,6 +567,7 @@ export class Grove {
       lands: LANDS.map((l) => ({ ...l, risen: landOf(this.world).includes(l) })),
       stock: stockOf(this.world),
       family: { baby: this.world.baby ?? null, nest: this.world.nest ?? null },
+      tickets: this.tickets.list(),
       resources: RESOURCES,
       costs: COSTS,
       islands: ISLANDS.map((i) => ({ ...i, bridged: bridged(this.world).has(i.id) })),

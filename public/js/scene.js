@@ -676,6 +676,7 @@ export class GroveScene {
     this.state = state;
     this.places = state.places;
     this.buildLayer.sync(state);
+    this.#ticketBoard((state.tickets ?? []).filter((t) => t.status === 'open').length);
     this.clockFrac = state.clock.frac;
     this.clockDay = state.clock.day;
     this.clockAt = performance.now();
@@ -702,6 +703,46 @@ export class GroveScene {
       view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
+  }
+
+  // A little notice board by the clearing, showing how many tickets wait for the visitor.
+  #ticketBoard(open) {
+    if (!this.board) {
+      const g = new THREE.Group();
+      const x = -2.2;
+      const z = 4.8;
+      g.position.set(x, this.groundY(x, z), z);
+      g.rotation.y = 0.5;
+      const wood = new THREE.MeshStandardMaterial({ color: '#8a6a4a', roughness: 0.85 });
+      for (const px of [-0.45, 0.45]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.3, 6), wood);
+        post.position.set(px, 0.65, 0);
+        g.add(post);
+      }
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06), new THREE.MeshStandardMaterial({ color: '#c9a77c', roughness: 0.9 }));
+      panel.position.y = 1.05;
+      g.add(panel);
+      this.boardNotes = [];
+      for (let i = 0; i < 6; i++) {
+        const note = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.22), new THREE.MeshStandardMaterial({ color: '#f6efd8', roughness: 1 }));
+        note.position.set(-0.38 + (i % 3) * 0.38, 1.16 - Math.floor(i / 3) * 0.28, 0.035);
+        note.rotation.z = (i % 2 ? 1 : -1) * 0.08;
+        g.add(note);
+        this.boardNotes.push(note);
+      }
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      const el = document.createElement('div');
+      el.className = 'ticket-board';
+      const label = new CSS2DObject(el);
+      label.position.y = 1.75;
+      g.add(label);
+      this.boardEl = el;
+      this.scene.add(g);
+      this.board = g;
+    }
+    this.boardNotes.forEach((n, i) => (n.visible = i < open));
+    this.boardEl.textContent = open ? `${open} ticket${open === 1 ? '' : 's'} for you` : 'Ticket board';
+    this.boardEl.classList.toggle('none', !open);
   }
 
   #carry(view, list) {

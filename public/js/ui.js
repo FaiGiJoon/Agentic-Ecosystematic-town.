@@ -12,7 +12,7 @@ const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
   approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -350,6 +350,34 @@ export function createUI({ scene, api }) {
       <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}</div>`;
   }
 
+  // Tickets the koalas wrote for you, with a reply box and a close button each.
+  function drawTickets() {
+    const body = $('#tab-tickets');
+    if (body.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // don't wipe a reply being typed
+    const list = state.tickets ?? [];
+    body.innerHTML = `<p class="empty">When the koalas hit a problem they can't solve, they write it down for you. Your answer reaches them on their next decision.</p>`
+      + (list.length ? list.map((t) => `
+      <article class="tcard ${t.status}" data-id="${t.id}">
+        <div class="thead"><b>${esc(name(t.koala))}</b><span>${t.status === 'open' ? 'waiting for you' : 'answered'}</span></div>
+        <p class="ttext">${esc(t.text)}</p>
+        ${t.reply ? `<p class="treply">You: ${esc(t.reply)}</p>` : ''}
+        <form class="treplyform"><textarea maxlength="300" rows="2" placeholder="Write an answer" aria-label="Answer ${esc(name(t.koala))}"></textarea>
+        <div class="tbtns"><button class="btn" type="submit">${t.reply ? 'Answer again' : 'Answer'}</button><button class="btn ghost tclose" type="button">Close ticket</button></div></form>
+      </article>`).join('') : '<p class="empty">No tickets right now.</p>');
+    for (const card of body.querySelectorAll('.tcard')) {
+      const id = Number(card.dataset.id);
+      card.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = card.querySelector('textarea').value.trim();
+        if (!text) return;
+        try { await api.reply(id, text); toast('Answer sent.'); } catch (err) { toast(err.message); }
+      });
+      card.querySelector('.tclose').addEventListener('click', async () => {
+        try { await api.close(id); } catch (err) { toast(err.message); }
+      });
+    }
+  }
+
   function drawTalk() {
     const body = $('#tab-talk');
     const atEnd = body.scrollTop + body.clientHeight >= body.scrollHeight - 30;
@@ -443,6 +471,7 @@ export function createUI({ scene, api }) {
     if (tab === 'koalas') drawKoalas();
     if (tab === 'talk') drawTalk();
     if (tab === 'builds') drawBuilds();
+    if (tab === 'tickets') drawTickets();
     if (tab === 'meter') drawMeter();
     drawInspector();
   }
