@@ -197,37 +197,43 @@ export function buildAmbient({ scene, count, bounds, groundY }) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 2));
-  const u = { uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 1 }, uScale: { value: 800 } };
+  const u = { uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 1 }, uGolden: { value: 0 }, uScale: { value: 800 } };
   const m = new THREE.ShaderMaterial({
     uniforms: u,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: /* glsl */ `
       attribute vec2 aSeed;
-      uniform float uTime, uNight, uDay, uScale;
-      varying float vA; varying float vMode;
+      uniform float uTime, uNight, uDay, uGolden, uScale;
+      varying float vA; varying float vMode; varying float vGold;
       void main(){
         float t = uTime, s = aSeed.x;
-        vec3 p = position + vec3(sin(t * 0.45 + s) * 1.6 + sin(t * 1.1 + s * 3.0) * 0.3, sin(t * 1.2 + s * 2.0) * 0.45, cos(t * 0.37 + s * 1.7) * 1.6);
+        // by day these are dust motes and pollen, drifting slowly in the light; by night, fireflies
+        float drift = mix(0.4, 1.0, uNight);
+        vec3 p = position + vec3(sin(t * 0.45 * drift + s) * 1.6 + sin(t * 1.1 + s * 3.0) * 0.3, sin(t * 1.2 * drift + s * 2.0) * 0.45, cos(t * 0.37 * drift + s * 1.7) * 1.6);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float fire = uNight;
         float blink = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(t * (1.1 + aSeed.y * 1.6) + s * 5.0), 3.0);
-        vA = mix(uDay * (0.25 + 0.35 * aSeed.y), blink, fire);
+        float glint = 0.6 + 0.4 * sin(t * 2.3 + s * 7.0); // motes turning in a sunbeam
+        vA = mix(uDay * (0.22 + 0.33 * aSeed.y) * (1.0 + uGolden * 1.6) * glint, blink, fire);
         vMode = fire;
-        float size = mix(0.07, 0.34, fire) * (0.7 + 0.6 * aSeed.y);
+        vGold = uGolden;
+        float size = mix(0.055, 0.34, fire) * (0.7 + 0.6 * aSeed.y);
         gl_PointSize = clamp(size * uScale / max(0.1, -mv.z), 1.0, 60.0);
       }
     `,
     fragmentShader: /* glsl */ `
-      varying float vA; varying float vMode;
+      varying float vA; varying float vMode; varying float vGold;
       void main(){
         vec2 c = gl_PointCoord - 0.5;
         float d = length(c) * 2.0;
         float core = 1.0 - smoothstep(0.0, 1.0, d);
         float a = core * core * vA;
         if (a < 0.01) discard;
-        vec3 col = mix(vec3(1.0, 0.92, 0.62), vec3(0.78, 1.0, 0.42), vMode);
-        gl_FragColor = vec4(col * (1.0 + vMode * 1.6), a);
+        vec3 day = mix(vec3(1.0, 0.94, 0.7), vec3(1.0, 0.78, 0.42), vGold);
+        vec3 col = mix(day, vec3(0.78, 1.0, 0.42), vMode);
+        // fireflies are bright in HDR so the bloom pass gives them a soft halo
+        gl_FragColor = vec4(col * (1.0 + vMode * 2.8 + vGold * 0.6), a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }

@@ -913,10 +913,12 @@ export class GroveScene {
     this.renderer.toneMappingExposure = 0.9 + 0.38 * day;
     this.shroomMat.emissiveIntensity = pal.night * 2.2;
     this.lanternLight.intensity = pal.night * 8;
-    this.lanternGlass.material.emissiveIntensity = 0.5 + pal.night * 3;
+    this.lanternGlass.material.emissiveIntensity = 0.5 + pal.night * 4.5; // bright enough to bloom
     this.ambient.u.uTime.value = t;
     this.ambient.u.uNight.value = pal.night;
     this.ambient.u.uDay.value = day * smooth(0.0, 0.25, el);
+    // golden hour: low warm sun, the air full of glinting dust
+    this.ambient.u.uGolden.value = day * (1 - smooth(0.12, 0.45, el)) * smooth(0.0, 0.08, el);
     this.ambient.u.uScale.value = this.pxScale;
     this.night = pal.night;
     this.sunUp = sunUp;
@@ -1106,7 +1108,7 @@ export class GroveScene {
     this.fx.update(dt, this.pxScale);
     if (this.reduced) return;
     // gum leaves loosen and drift down from the big trees by day
-    if ((this.fxTimers.leaf += dt) > 0.7 && this.night < 0.6) {
+    if ((this.fxTimers.leaf += dt) > 0.45 && this.night < 0.6) {
       this.fxTimers.leaf = 0;
       const ids = Object.keys(this.trees ?? {});
       const p = this.places[ids[Math.floor(Math.random() * ids.length)]];

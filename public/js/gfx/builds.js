@@ -397,7 +397,7 @@ export class BuildLayer {
     }
     for (const g of this.glows) {
       g.light.intensity = night * 5;
-      g.glass.material.emissiveIntensity = 0.3 + night * 2.4 + Math.sin(t * 3 + g.glass.position.x) * 0.1 * night;
+      g.glass.material.emissiveIntensity = 0.3 + night * 4 + Math.sin(t * 3 + g.glass.position.x) * 0.15 * night; // blooms at night
     }
   }
 }
