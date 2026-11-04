@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { koalaArgs, think } from '../hq/grove-brain.js';
+import { koalaArgs, researchArgs, RESEARCH_SCHEMA, RESEARCH_SYSTEM, think } from '../hq/grove-brain.js';
 import { DECISION_SCHEMA } from '../hq/grove-world.js';
 
 const FAKE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-koala.mjs');
@@ -12,7 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'grove-brain-'));
 
 function run(mode, extra = {}) {
   process.env.FAKE_MODE = mode;
-  return think({ bin: FAKE, args: koalaArgs({ system: 'You are Mallee', prompt: 'hi', model: 'claude-haiku-5-5', callUsd: 0.05 }), cwd: tmp, timeoutMs: 5000, ...extra });
+  return think({ bin: FAKE, args: koalaArgs({ system: 'You are Crystal', prompt: 'hi', model: 'claude-haiku-5-5', callUsd: 0.05 }), cwd: tmp, timeoutMs: 5000, ...extra });
 }
 
 test('koalaArgs: isolated, no tools, cheap model, budget, structured JSON', () => {
@@ -80,4 +80,23 @@ test('a missing binary is an error, not a crash', async () => {
   const r = await think({ bin: path.join(tmp, 'no-such-claude'), args: [], cwd: tmp, timeoutMs: 2000 });
   assert.equal(r.ok, false);
   assert.ok(r.error);
+});
+
+test('researchArgs: the same isolation, but web search as the only tool, its own budget and schema', () => {
+  assert.deepEqual(RESEARCH_SCHEMA.required, ['fact', 'idea']);
+  assert.deepEqual(researchArgs({ prompt: 'Q', model: 'claude-haiku-5-5', callUsd: 0.1 }), [
+    '-p', 'Q',
+    '--output-format', 'json',
+    '--model', 'claude-haiku-5-5',
+    '--system-prompt', RESEARCH_SYSTEM,
+    '--json-schema', JSON.stringify(RESEARCH_SCHEMA),
+    '--tools', 'WebSearch',
+    '--allowedTools', 'WebSearch',
+    '--setting-sources', '',
+    '--strict-mcp-config',
+    '--disable-slash-commands',
+    '--permission-mode', 'dontAsk',
+    '--no-session-persistence',
+    '--max-budget-usd', '0.1',
+  ]);
 });

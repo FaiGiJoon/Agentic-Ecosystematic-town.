@@ -2,7 +2,7 @@
 // panel (Koalas, Talk, Meter), the inspector card with the visitor's actions, and
 // the event feed. Model text is always inserted as text, never as HTML.
 
-import { fmtUsd, fmtTokens, statusOf } from './view.js';
+import { fmtUsd, fmtTokens, statusOf, stockText } from './view.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -10,9 +10,9 @@ const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></
 const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
-  approach: 'keeping company', give: 'sharing', build: 'building', sit: 'sitting',
+  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -71,6 +71,33 @@ export function createUI({ scene, api }) {
       else toast('Walk closer to a koala first.');
     }
   });
+
+  // --- naming a newborn ----------------------------------------------------------------
+  const nameForm = $('#name-baby');
+  let naming = null;
+  const asked = new Set();
+  nameForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = $('#baby-name');
+    try {
+      await api.name(naming, input.value.trim());
+      toast(`Welcome to the grove, ${input.value.trim()}!`);
+      nameForm.hidden = true;
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  function offerName() {
+    const baby = state.koalas.find((k) => k.parents && !k.named && !asked.has(k.id));
+    if (!baby || !nameForm.hidden) return;
+    naming = baby.id;
+    asked.add(baby.id);
+    const [m, d] = baby.parents.map(name);
+    nameForm.querySelector('.fine').textContent = `${m} and ${d} have a little ${baby.gender === 'boy' ? 'boy' : 'girl'}. For now ${baby.gender === 'boy' ? 'he' : 'she'} is called ${baby.name}.`;
+    $('#baby-name').value = baby.name;
+    nameForm.hidden = false;
+    $('#baby-name').select();
+  }
 
   // --- time of day ---------------------------------------------------------------------
   const timePop = $('#time-pop');
@@ -303,15 +330,52 @@ export function createUI({ scene, api }) {
         <div class="bmeta">${b.done ? 'Built' : `${b.progress} of ${b.effort} steps`} by ${esc(who(b))}, at the ${esc(state.places[b.plot]?.name ?? b.plot)}</div>
       </div>`;
     const toNext = next ? 2 - (done.length % 2) : 0;
+    const stock = state.stock ?? {};
+    const cost = (c) => Object.entries(c ?? {}).map(([r, n]) => `${n} ${r}`).join(', ');
     $('#tab-builds').innerHTML = `
-      <p class="empty">The koalas decide for themselves what to build and what to call it. Building together goes twice as fast.</p>
+      <p class="empty">The koalas decide for themselves what to build and what to call it. Each build is paid for from the Stockpile, and building together goes twice as fast.</p>
+      <h3>Stockpile</h3>
+      <div class="stock">${['wood', 'water', 'sand', 'stone', 'book'].map((r) => `<span class="res res-${r}"><i></i>${stock[r] ?? 0} ${r === 'book' ? 'books' : r}</span>`).join('')}</div>
+      <h3>Islands</h3>
+      <div class="rows">${(state.islands ?? []).map((i) => `<div class="row islandrow"><div class="name"><span class="res res-${i.resource}"><i></i></span>${esc(i.name)}</div>
+        <div class="meta">${i.bridged ? 'bridged' : 'needs a bridge: 4 wood, 2 stone'}</div></div>`).join('')}</div>
       <h3>Going up</h3>
       ${open.length ? open.map(card).join('') : '<p class="empty">Nothing is being built right now.</p>'}
       <h3>Built (${done.length})</h3>
       ${done.length ? done.map(card).join('') : '<p class="empty">Nothing yet. Their first build will appear here and in the grove.</p>'}
       <h3>The grove</h3>
       <p class="lastcall">${risen.length ? `New land so far: ${risen.map((l) => esc(l.name)).join(', ')}.` : 'Just the island for now.'}
-        ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>`;
+        ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>
+      <h3>What things cost</h3>
+      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}</div>`;
+  }
+
+  // Tickets the koalas wrote for you, with a reply box and a close button each.
+  function drawTickets() {
+    const body = $('#tab-tickets');
+    if (body.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // don't wipe a reply being typed
+    const list = state.tickets ?? [];
+    body.innerHTML = `<p class="empty">When the koalas hit a problem they can't solve, they write it down for you. Your answer reaches them on their next decision.</p>`
+      + (list.length ? list.map((t) => `
+      <article class="tcard ${t.status}" data-id="${t.id}">
+        <div class="thead"><b>${esc(name(t.koala))}</b><span>${t.status === 'open' ? 'waiting for you' : 'answered'}</span></div>
+        <p class="ttext">${esc(t.text)}</p>
+        ${t.reply ? `<p class="treply">You: ${esc(t.reply)}</p>` : ''}
+        <form class="treplyform"><textarea maxlength="300" rows="2" placeholder="Write an answer" aria-label="Answer ${esc(name(t.koala))}"></textarea>
+        <div class="tbtns"><button class="btn" type="submit">${t.reply ? 'Answer again' : 'Answer'}</button><button class="btn ghost tclose" type="button">Close ticket</button></div></form>
+      </article>`).join('') : '<p class="empty">No tickets right now.</p>');
+    for (const card of body.querySelectorAll('.tcard')) {
+      const id = Number(card.dataset.id);
+      card.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = card.querySelector('textarea').value.trim();
+        if (!text) return;
+        try { await api.reply(id, text); toast('Answer sent.'); } catch (err) { toast(err.message); }
+      });
+      card.querySelector('.tclose').addEventListener('click', async () => {
+        try { await api.close(id); } catch (err) { toast(err.message); }
+      });
+    }
   }
 
   function drawTalk() {
@@ -386,6 +450,7 @@ export function createUI({ scene, api }) {
     const u = state.usage;
     $('#chips').innerHTML = `
       <div class="chip status ${st.key}" title="${esc(st.text)}"><i></i>${esc({ live: 'Live', thinking: 'Thinking', paused: 'Paused', capped: 'Cap reached', away: 'Waiting', offline: 'Offline' }[st.key])}</div>
+      <div class="chip stockchip" title="What is in the Stockpile">Stockpile <b>${esc(stockText(state.stock))}</b></div>
       <div class="chip real" title="Real spend today, against GROVE_DAY_USD">Today <b>${fmtUsd(u.today.cost)}</b> / ${fmtUsd(u.dayUsd)}</div>
       <div class="chip real" title="Real tokens today, in and out">Tokens <b>${fmtTokens(u.today.tokens_in + u.today.tokens_out)}</b></div>`;
     playBtn.innerHTML = state.playing ? `${ICON('i-pause')}Pause` : `${ICON('i-playbtn')}Play`;
@@ -402,9 +467,11 @@ export function createUI({ scene, api }) {
   function draw() {
     if (!state) return;
     drawChips();
+    offerName();
     if (tab === 'koalas') drawKoalas();
     if (tab === 'talk') drawTalk();
     if (tab === 'builds') drawBuilds();
+    if (tab === 'tickets') drawTickets();
     if (tab === 'meter') drawMeter();
     drawInspector();
   }

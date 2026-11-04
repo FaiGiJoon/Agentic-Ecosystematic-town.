@@ -212,6 +212,41 @@ h3 { color: var(--muted); }
 .build-label small { font: 10px var(--mono); color: #d7dee8; }
 .build-label.done { background: rgba(15, 21, 32, 0.55); }
 .build-label.done .prog, .build-label.done small { display: none; }
+
+/* resources: the stockpile, island rows and costs */
+.stock { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.res { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-xs) var(--mono); }
+.stock .res { padding: 6px 10px; border-radius: 99px; background: var(--glass-2); border: 1px solid var(--line); }
+.res i { width: 10px; height: 10px; border-radius: 3px; background: var(--rc); display: inline-block; }
+.res-wood { --rc: #8a6a4a; } .res-water { --rc: #4e8fa3; } .res-sand { --rc: #e6d29a; } .res-stone { --rc: #a9a196; } .res-book { --rc: #b05a3c; }
+.islandrow { cursor: default; }
+.costs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: var(--fs-xs); }
+.costs div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: var(--r-s); background: var(--glass-2); }
+.costs span { font-family: var(--mono); color: var(--muted); }
+.chip.stockchip b { color: var(--warm); }
+
+/* tickets */
+.tcard { padding: var(--s-3); border-radius: var(--r-m); background: var(--glass-2); border: 1px solid var(--line); border-left: 4px solid var(--gold); margin-bottom: var(--s-2); }
+.tcard.answered { border-left-color: var(--mint); }
+.thead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2); }
+.thead span { font: var(--fs-xs) var(--mono); color: var(--muted); }
+.ttext { margin: 6px 0; line-height: 1.45; }
+.treply { margin: 0 0 6px; color: var(--mint); font-size: var(--fs-s); }
+.treplyform textarea { width: 100%; resize: vertical; padding: 8px 10px; border-radius: var(--r-s); border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); font: var(--fs-s) var(--sans); }
+.tbtns { display: flex; gap: var(--s-2); margin-top: 6px; }
+.tbtns .btn:not(.ghost) { background: var(--mint); color: var(--mint-ink); }
+.ev.ticket, .line.ticket b, .line.ticket .x { color: var(--gold); }
+.ticket-board { font: 600 11px var(--sans); padding: 3px 8px; border-radius: 8px; background: rgba(240, 199, 94, 0.92); color: #2a2110; white-space: nowrap; pointer-events: none; }
+.ticket-board.none { background: rgba(15, 21, 32, 0.6); color: #dfe6ef; }
+
+/* naming a newborn */
+#name-baby { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); z-index: 8; width: min(420px, calc(100% - 32px)); padding: var(--s-5); border-radius: var(--r-l); background: rgba(15, 21, 32, 0.95); border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: var(--shadow); }
+#name-baby[hidden] { display: none; }
+#name-baby h2 { margin: 0 0 var(--s-2); font: 700 22px var(--sans); color: var(--mint); }
+#name-baby label { display: block; margin: var(--s-3) 0 var(--s-2); font-size: var(--fs-s); color: var(--muted); }
+#name-baby .talkrow { display: flex; gap: var(--s-2); }
+#name-baby input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-s); border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text); font: 15px var(--sans); }
+#name-baby .btn { background: var(--mint); color: var(--mint-ink); }
 #hint { position: fixed; bottom: 14px; left: calc((100% - 420px) / 2); transform: translateX(-50%); z-index: 3; padding: 7px 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; pointer-events: none; backdrop-filter: blur(8px); }
 #toast { padding: 11px 18px; border-radius: var(--r-m); font: 700 var(--fs-m) var(--sans); box-shadow: var(--shadow); }
 

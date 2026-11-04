@@ -29,6 +29,14 @@ function invent() {
     { action: 'climb', target: pick(['big_gum', 'blue_gum', 'river_gum']), say: '', mood: 'content' },
     { action: 'sit', target: '', say: pick(['The wind smells like rain.', '', 'Hmm.']), mood: 'cozy' },
   ];
+  // the economy: gather what is here, store what is carried, head to wood when paws are empty
+  const here = /Here you can gather: (\w+)/.exec(prompt)?.[1];
+  const carrying = /You carry: (?!nothing)/.test(prompt);
+  if (here) options.push({ action: 'gather', target: here, say: pick(['', 'Ooh, ' + here + '!', 'One more!']), mood: 'curious' }, { action: 'gather', target: here, say: '', mood: 'content' });
+  if (carrying) options.push({ action: 'store', target: '', say: pick(['', 'Into the pile it goes!']), mood: 'happy' }, { action: 'store', target: '', say: '', mood: 'content' });
+  if (!here && !carrying) options.push({ action: 'move', target: pick(['big_gum', 'river_gum', 'blue_gum', 'lookout', 'pond']), say: '', mood: 'curious' });
+  const bridge = /(bridge_\w+) \(Bridge to/.exec(prompt)?.[1];
+  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', say: 'Let us build a bridge!', mood: 'curious' });
   if (/You can build/.test(prompt)) {
     const underway = /Being built: (?!nothing)/.test(prompt);
     const names = ['Sky Nest', 'Cozy Corner', 'Moon Perch', 'Gumnut Lodge', 'Pebble Path', 'Snack Shack', 'Glow Post'];
@@ -36,6 +44,11 @@ function invent() {
     const keepGoing = () => ({ action: 'build', target: '', build_name: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
     options.push(build(), underway ? keepGoing() : build(), underway ? keepGoing() : build());
   }
+  if (!/Your tickets still waiting/.test(prompt) && Math.random() < 0.3) {
+    options.push({ action: 'file_ticket', target: '', say: pick(['We need more stone to build a bridge. Where can we find it?', 'It gets very dark at night. Could we have more lanterns?', 'My paws are always full. How can I carry more?']), mood: 'curious' });
+  }
+  if (/nest \(with/.test(prompt)) options.push({ action: 'nest', target: '', say: 'Shall we make a cozy nest together?', mood: 'cozy' });
+  if (/research \(target/.test(prompt)) options.push({ action: 'research', target: pick(['How do koalas find water?', 'What do turtles eat?', 'How do you build a strong bridge?']), say: 'Let me look that up!', mood: 'curious' });
   if (hungry) options.push({ action: 'eat', target: pick(['big_gum', 'river_gum', 'blue_gum']), say: 'Munch munch.', mood: 'hungry' });
   if (tired) options.push({ action: 'nap', target: '', say: 'Just a little nap...', mood: 'sleepy' });
   if (heard) options.push({ action: 'sit', target: '', say: pick(['I heard you!', 'Yes, I think so too.', 'Really? Tell me more.']), mood: 'happy' });
@@ -50,7 +63,11 @@ function invent() {
   };
 }
 
-const decision = process.env.FAKE_DECISION ? JSON.parse(process.env.FAKE_DECISION) : invent();
+// A research call (web search is its only tool) answers with a fact and an idea instead of a decision.
+const researching = args.includes('WebSearch');
+const decision = process.env.FAKE_DECISION ? JSON.parse(process.env.FAKE_DECISION)
+  : researching ? { fact: pick(['Koalas get most of the water they need from gum leaves.', 'Turtles can pull their head into their shell to stay safe.', 'A bridge is stronger with ropes on both sides.']), idea: pick(['', 'We could build a well.', 'Let us build stepping stones to the pond.']) }
+  : invent();
 const usage = { input_tokens: 900, cache_creation_input_tokens: 0, cache_read_input_tokens: 600, output_tokens: 80 };
 const base = { type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.0021, duration_ms: 1500, usage };
 

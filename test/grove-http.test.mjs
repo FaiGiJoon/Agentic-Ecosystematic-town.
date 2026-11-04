@@ -50,7 +50,7 @@ function rawGet(rawPath, headers = {}) {
 
 test('GET /api/grove returns both koalas, the places and the real usage meter', async () => {
   const s = await (await fetch(base + '/api/grove')).json();
-  assert.deepEqual(s.koalas.map((k) => k.id), ['mallee', 'bramble']);
+  assert.deepEqual(s.koalas.map((k) => k.id), ['crystal', 'ruby']);
   assert.ok(s.places.pond);
   assert.equal(s.playing, false);
   assert.equal(s.usage.today.cost, 0);
@@ -68,10 +68,10 @@ test('play, heartbeat and pause need a JSON POST from this origin', async () => 
 });
 
 test('act gives, and bad requests get their status', async () => {
-  const res = await post('/api/grove/act', { koala: 'mallee', kind: 'give', item: 'pebble' });
+  const res = await post('/api/grove/act', { koala: 'crystal', kind: 'give', item: 'pebble' });
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).koalas[0].inventory, ['pebble']);
-  assert.equal((await post('/api/grove/act', { koala: 'mallee', kind: 'give', item: 'gold' })).status, 400);
+  assert.equal((await post('/api/grove/act', { koala: 'crystal', kind: 'give', item: 'gold' })).status, 400);
   assert.equal((await post('/api/grove/act', { koala: 'nobody', kind: 'pet' })).status, 404);
   assert.equal((await post('/api/grove/nope')).status, 404);
   assert.equal((await post('/api/tickets', { title: 'x' })).status, 404, 'the ticket board is gone');
@@ -82,11 +82,11 @@ test('changes stream over /api/events as "grove" frames', { timeout: 5000 }, asy
   const res = await fetch(base + '/api/events', { signal: ctrl.signal });
   const reader = res.body.getReader();
   await reader.read(); // ": connected"
-  await post('/api/grove/act', { koala: 'bramble', kind: 'pet' });
+  await post('/api/grove/act', { koala: 'ruby', kind: 'pet' });
   let text = '';
   while (!text.includes('event: grove')) text += new TextDecoder().decode((await reader.read()).value);
   ctrl.abort();
-  assert.match(text, /patted Bramble/);
+  assert.match(text, /patted Ruby/);
 });
 
 test('foreign Host header is 403 on every route; localhost is allowed', async () => {
@@ -115,7 +115,7 @@ test('static files: the grove at /, content types, traversal is 404', async () =
 });
 
 test('bodies over 16 KB are 413', async () => {
-  const res = await post('/api/grove/act', { koala: 'mallee', kind: 'say', text: 'a'.repeat(20 * 1024) });
+  const res = await post('/api/grove/act', { koala: 'crystal', kind: 'say', text: 'a'.repeat(20 * 1024) });
   assert.equal(res.status, 413);
 });
 
@@ -125,4 +125,29 @@ test('POST /api/grove/time moves the clock; a bad time is 400', async () => {
   assert.match((await res.json()).clock.label, /12:00/);
   assert.equal((await post('/api/grove/time', { to: 'teatime' })).status, 400);
   assert.equal((await post('/api/grove/time', { to: 'noon' }, { 'content-type': 'text/plain' })).status, 415);
+});
+
+test('POST /api/grove/name names a newborn; anyone older is 409; bad names 400', async () => {
+  grove.world.baby = { due: 0, parents: ['crystal', 'ruby'] };
+  grove.play();
+  grove.heartbeat();
+  grove.tick();
+  const pip = grove.state().koalas.find((k) => k.parents);
+  assert.ok(pip);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'Sky' })).status, 200);
+  assert.equal((await post('/api/grove/name', { koala: 'ruby', name: 'Bob' })).status, 409);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: '' })).status, 400);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'x'.repeat(30) })).status, 400);
+  assert.equal((await post('/api/grove/name', { koala: pip.id, name: 'Sky' }, { 'content-type': 'text/plain' })).status, 415);
+  grove.pause();
+});
+
+test('ticket routes: reply and close need JSON from this origin; unknown ids 404; long text 400', async () => {
+  const t = grove.tickets.open('crystal', 'We need more water');
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'The pond has plenty!' })).status, 200);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'x'.repeat(301) })).status, 400);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/reply`, { text: 'hi' }, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await post('/api/grove/tickets/999/reply', { text: 'hi' })).status, 404);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/close`)).status, 200);
+  assert.equal((await post(`/api/grove/tickets/${t.id}/close`, {}, { 'content-type': 'text/plain' })).status, 415);
 });

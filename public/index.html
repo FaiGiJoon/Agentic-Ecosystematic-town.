@@ -86,6 +86,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="koalas" class="on" type="button">Koalas</button>
       <button data-tab="builds" type="button">Builds</button>
+      <button data-tab="tickets" type="button">Tickets</button>
       <button data-tab="talk" type="button">Talk</button>
       <button data-tab="meter" type="button">Meter</button>
     </nav>
@@ -93,6 +94,7 @@
     <section class="tab-body" id="tab-koalas"></section>
     <section class="tab-body" id="tab-talk" hidden></section>
     <section class="tab-body" id="tab-builds" hidden></section>
+    <section class="tab-body" id="tab-tickets" hidden></section>
     <section class="tab-body" id="tab-meter" hidden></section>
     <button id="panel-toggle" type="button" title="Toggle panel">⟩</button>
   </aside>
@@ -101,12 +103,18 @@
   <div id="feed" aria-live="polite"></div>
   <div id="hint"></div>
   <div id="toast" role="status"></div>
+  <form id="name-baby" hidden>
+    <h2>A baby koala was born!</h2>
+    <p class="fine"></p>
+    <label for="baby-name">Give the baby a name</label>
+    <div class="talkrow"><input id="baby-name" maxlength="24" autocomplete="off"><button class="btn" type="submit">Name the baby</button></div>
+  </form>
 
   <div id="intro" hidden>
     <div class="intro-card">
       <svg class="intro-logo" aria-hidden="true"><use href="#i-koala"/></svg>
       <h1>Koala Grove</h1>
-      <p class="lede">Mallee and Bramble are asleep in their grove. Both are real AI agents: every move they make and every word they say is a model decision, paid for in real tokens.</p>
+      <p class="lede">Crystal and Ruby are asleep in their grove. Both are real AI agents: every move they make and every word they say is a model decision, paid for in real tokens.</p>
       <p class="fine" id="intro-cap"></p>
       <div class="intro-actions">
         <button class="btn wake" id="intro-play" type="button">Wake the koalas</button>

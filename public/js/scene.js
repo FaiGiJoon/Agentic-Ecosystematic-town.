@@ -8,8 +8,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, skyAt, landRoute } from './view.js';
+import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
+import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
 import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
@@ -134,6 +135,7 @@ export class GroveScene {
     this.#world(rand, S, lap);
     this.buildLayer = new BuildLayer({ scene: this.scene, tex: this.tex, baseY: (x, z) => T.height(x, z), island: ISLAND });
     this.#buildKoalas(koalas);
+    this.critters = new Critters({ scene: this.scene, groundY: this.groundY, places });
     lap('koalas');
     this.#effects(S);
     lap('effects');
@@ -518,23 +520,9 @@ export class GroveScene {
   }
 
   #buildKoalas(list) {
-    for (const k of list) {
-      const view = new Koala(k, { tex: this.tex, groundY: this.groundY });
-      const s = spotFor(this.places, k.place, k.id, k.activity, k.reach);
-      view.grow(k.size ?? 1);
-      view.place(s.x, s.y, s.z);
-      view.tagEl.addEventListener('click', () => this.onPick(k.id));
-      this.koalas.set(k.id, view);
-      this.scene.add(view.root);
-    }
+    for (const k of list) this.#koalaView(k);
     // soft contact shadows under everyone: cheap occlusion that sells the footing
-    this.blobs = [...this.koalas.values(), this.visitor].map((who) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex.blob, transparent: true, depthWrite: false, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
-      m.rotation.x = -Math.PI / 2;
-      m.renderOrder = 1;
-      this.scene.add(m);
-      return { mesh: m, who };
-    });
+    this.blobs = [...this.koalas.values(), this.visitor].map((who) => this.#blob(who));
     // the ring under a selected or hovered koala
     const ringGeo = new THREE.RingGeometry(0.78, 0.95, 56);
     ringGeo.rotateX(-Math.PI / 2);
@@ -542,6 +530,32 @@ export class GroveScene {
     this.ring.visible = false;
     this.ring.renderOrder = 3;
     this.scene.add(this.ring);
+  }
+
+  #blob(who) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex.blob, transparent: true, depthWrite: false, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 1;
+    this.scene.add(m);
+    return { mesh: m, who };
+  }
+
+  // One koala's view: model, tag, carried blocks. Also used when a baby is born mid-session.
+  #koalaView(k) {
+    {
+      const view = new Koala(k, { tex: this.tex, groundY: this.groundY });
+      const s = spotFor(this.places, k.place, k.id, k.activity, k.reach);
+      view.grow(k.size ?? 1);
+      view.place(s.x, s.y, s.z);
+      view.tagEl.addEventListener('click', () => this.onPick(k.id));
+      // what the koala carries: little blocks held against its chest
+      view.carry = new THREE.Group();
+      view.carry.position.set(0, 0.95, 0.55);
+      view.rig.add(view.carry);
+      this.koalas.set(k.id, view);
+      this.scene.add(view.root);
+      return view;
+    }
   }
 
   #effects(S) {
@@ -651,7 +665,7 @@ export class GroveScene {
 
   // The way to walk: over a bridge when it leads to or from new land, and around the pond.
   walk(from, to) {
-    const lands = (this.state?.lands ?? []).filter((l) => l.risen);
+    const lands = [...(this.state?.lands ?? []).filter((l) => l.risen), ...(this.state?.islands ?? []).filter((i) => i.bridged)];
     const over = landRoute(from, to, lands, ISLAND);
     if (!over.length) return this.route(from, to);
     return [...this.route(from, over[0]), ...over, ...this.route(over.at(-1), to)];
@@ -662,23 +676,86 @@ export class GroveScene {
     this.state = state;
     this.places = state.places;
     this.buildLayer.sync(state);
+    this.#ticketBoard((state.tickets ?? []).filter((t) => t.status === 'open').length);
     this.clockFrac = state.clock.frac;
     this.clockDay = state.clock.day;
     this.clockAt = performance.now();
     for (const k of state.koalas) {
-      const view = this.koalas.get(k.id);
-      if (!view) continue;
+      let view = this.koalas.get(k.id);
+      if (!view) {
+        view = this.#koalaView(k); // a baby born while the page is open
+        this.blobs.push(this.#blob(view));
+        this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 1, view.pos.z, 6);
+      }
       const before = prev?.koalas.find((q) => q.id === k.id);
       if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1 * view.size, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
       view.grow(k.size ?? 1);
       view.thinking = k.thinking;
+      if (view.name !== k.name) {
+        view.name = k.name; // the visitor named a baby
+        view.tagEl.querySelector('.n').textContent = k.name;
+      }
+      this.#carry(view, carried(k));
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       const anim = animFor(k);
       view.setGoal(spot, anim, this.walk(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
-      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[anim] ?? 'sit'}`);
+      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
+  }
+
+  // A little notice board by the clearing, showing how many tickets wait for the visitor.
+  #ticketBoard(open) {
+    if (!this.board) {
+      const g = new THREE.Group();
+      const x = -2.2;
+      const z = 4.8;
+      g.position.set(x, this.groundY(x, z), z);
+      g.rotation.y = 0.5;
+      const wood = new THREE.MeshStandardMaterial({ color: '#8a6a4a', roughness: 0.85 });
+      for (const px of [-0.45, 0.45]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.3, 6), wood);
+        post.position.set(px, 0.65, 0);
+        g.add(post);
+      }
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06), new THREE.MeshStandardMaterial({ color: '#c9a77c', roughness: 0.9 }));
+      panel.position.y = 1.05;
+      g.add(panel);
+      this.boardNotes = [];
+      for (let i = 0; i < 6; i++) {
+        const note = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.22), new THREE.MeshStandardMaterial({ color: '#f6efd8', roughness: 1 }));
+        note.position.set(-0.38 + (i % 3) * 0.38, 1.16 - Math.floor(i / 3) * 0.28, 0.035);
+        note.rotation.z = (i % 2 ? 1 : -1) * 0.08;
+        g.add(note);
+        this.boardNotes.push(note);
+      }
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      const el = document.createElement('div');
+      el.className = 'ticket-board';
+      const label = new CSS2DObject(el);
+      label.position.y = 1.75;
+      g.add(label);
+      this.boardEl = el;
+      this.scene.add(g);
+      this.board = g;
+    }
+    this.boardNotes.forEach((n, i) => (n.visible = i < open));
+    this.boardEl.textContent = open ? `${open} ticket${open === 1 ? '' : 's'} for you` : 'Ticket board';
+    this.boardEl.classList.toggle('none', !open);
+  }
+
+  #carry(view, list) {
+    const key = list.join(',');
+    if (view.carryKey === key) return;
+    view.carryKey = key;
+    view.carry.clear();
+    list.slice(0, 4).forEach((r, i) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.18), new THREE.MeshStandardMaterial({ color: RESOURCE_COLORS[r], roughness: 0.8 }));
+      m.position.set((i % 2 ? 0.12 : -0.12), Math.floor(i / 2) * 0.17, 0);
+      m.castShadow = true;
+      view.carry.add(m);
+    });
   }
 
   #faceFor(k, spot) {
@@ -775,6 +852,7 @@ export class GroveScene {
     this.#koalas_(dt, t);
     this.#toys(dt, t);
     this.buildLayer.update(dt, t, this.night ?? 0);
+    this.critters.update(dt, t, this.night ?? 0);
     this.#life(dt, t);
     this.#camera(dt);
     if (!this.freeCam && this.cam === 'third') this.controls.update();
@@ -976,10 +1054,10 @@ export class GroveScene {
 
   #toys(dt, t) {
     this.seats.forEach((seat, i) => {
-      const id = i === 0 ? 'mallee' : 'bramble';
+      const id = i === 0 ? 'crystal' : 'ruby';
       const v = this.koalas.get(id);
       const on = v && v.anim === 'swing' && v.arrived;
-      const want = on ? Math.sin(t * 2.2 + (id === 'mallee' ? 0 : 1.4)) * 0.2 : 0;
+      const want = on ? Math.sin(t * 2.2 + (id === 'crystal' ? 0 : 1.4)) * 0.2 : 0;
       seat.rotation.x = damp(seat.rotation.x, want, 6, dt);
     });
     const gy = (x, z) => this.groundY(x, z);
