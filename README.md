@@ -53,8 +53,14 @@ scripts/uninstall-autostart.sh
   to joey, youngster and grown-up. Strength sets how big they are, how high they can climb, how
   much they can carry and how fast they tire.
 - Each decision is JSON: a private thought, an action and target, what they say out loud, a mood,
-  something to remember, how the moment changed their feelings about the other koala, and a name
-  when they start building something.
+  something to remember, how the moment changed their feelings about the other koala, a name (and
+  a one-sentence design) when they start building something, and a `wish`: something they would
+  love to do or make one day.
+- **They have their own minds.** Each koala has interests: Crystal likes brave explorers, shiny
+  stones and crystals, stars and faraway places; Ruby likes sleepy animals, eucalyptus and plants,
+  poems, the moon and night. Babies inherit a mix of their parents'. Nobody tells them to go to the
+  library; they go when they are curious. The Koalas tab shows each koala's wish, and a
+  "Learned (n)" fold lists the last 8 things it learned.
 - Memory lives in `data/grove.sqlite` (git-ignored) and survives restarts: the last 10 things
   each koala noticed, up to 12 long-term memories it chose to keep, a bond score from -100 to 100,
   a one-line opinion of its friend, and everything they have built. All of it goes into the next
@@ -62,9 +68,11 @@ scripts/uninstall-autostart.sh
 
 ### Building, and a world that grows
 
-The koalas decide for themselves what to build and what to call it: a log bench, a firefly
-lantern, a flower bed, a birdhouse, stepping stones, a leaf hut, a treehouse, a lookout tower, a
-well, a reading nook, or a bridge to one of the resource islands. Every build is paid for from the
+The koalas decide for themselves what to build and what to call it. They can pick one of the
+known kinds (a log bench, a firefly lantern, a flower bed, a birdhouse, stepping stones, a leaf
+hut, a treehouse, a lookout tower, a well, a reading nook, or a bridge to one of the resource
+islands), or **invent anything**: a game machine, a lighthouse, a boat, a pink castle. For an
+invention the koala gives a name and one sentence about what it is and looks like. Every build is paid for from the
 Stockpile (below), and takes 2 to 6 steps of work. A koala working alone adds one step; when both work at the
 same site, each step counts double, so building together is twice as fast. At most two things are
 built at once.
@@ -72,6 +80,23 @@ built at once.
 A site goes up behind scaffolding with a progress label, and the finished build stands in the
 grove under the name the koalas gave it (lanterns glow at night). Finished builds are places the
 koalas can go back to.
+
+**Inventions.** The game reads the design sentence for words and turns it into a build. Size comes
+from words like tiny/little/small or big/huge/giant/tall (otherwise medium). A shape comes from
+keywords (house, tower, machine, bridge, garden, statue, shelter, playground, boat; shelter if
+none match), extras like a roof, door, window, flag, wheel, screen, lights, chimney, slide,
+flowers, sign, dome, stairs, bell or star are added, and up to 3 colour words tint it. So every
+invention looks different. The design sentence shows when you hover the label. A "custom bridge"
+is only a footbridge for decoration; bridges to islands stay the island bridges.
+
+| Invention size | Cost | Work steps |
+| --- | --- | --- |
+| Small | 2 wood | 2 |
+| Medium | 3 wood, 1 stone | 4 |
+| Big | 5 wood, 3 stone | 6 |
+
+Words in the design change the bill: stone or rock swaps 1 wood for 1 stone; water, fountain or
+pool adds 1 water; sand or glass adds 1 sand; book, library or reading adds 1 book.
 
 Every two finished builds, new land rises out of the water off the island's edge (Fern Islet,
 Sunset Point, then Moss Isle), joined to the island by a rope bridge, with room for more building.
@@ -87,8 +112,9 @@ grown-up 4, items included), carries it home as little coloured blocks, and `sto
 shared **Stockpile** by the clearing. A fresh grove starts with 4 wood.
 
 Four floating islands sit off the island's edge, each holding one resource: Spring Isle, Sandy
-Shoal, Stone Crag and Library Isle. They can't be reached until the koalas build a bridge to them
-(4 wood and 2 stone). What things cost:
+Shoal, Stone Crag and Library Isle. **Library Isle is open from the start**: its bridge already
+stands, and a worn road runs from the Sunny Clearing to the bridge foot. The other three can't be
+reached until the koalas build a bridge to them (4 wood and 2 stone). What things cost:
 
 | Build | Cost | | Build | Cost |
 | --- | --- | --- | --- | --- |
@@ -122,14 +148,26 @@ When a koala hits a problem it can't solve ("we need more stone for the bridge")
 Answer it there; your answer goes into that koala's memory and nudges it to react. Each koala has
 at most 3 tickets waiting.
 
-### Research
+### Reading and research
 
-At Library Isle (once it is bridged) a koala can `research` a question. That is one separate
-`claude -p` call whose only tool is web search, with its own budget (`GROVE_RESEARCH_USD`, default
-$0.10) and at most `GROVE_RESEARCH_PER_DAY` (default 3) trips a day for the whole grove. What it
-learns goes into the koala's long-term memory, and any idea for the grove into what it just
-noticed. Like any decision, the call is metered. It still can't touch files or anything else on
-your computer.
+The library is the koalas' place to learn. Two different things happen there:
+
+- **Reading** (`read`, with a topic). A koala can read at Library Isle, or at any finished build
+  whose description mentions books, reading or a library (a Reading Nook, or an invention they
+  made for it). It is one cheap `claude -p` call with no tools, like opening a picture book: the
+  book answers with a fact and maybe an idea. Capped at `GROVE_READS_PER_DAY` (default 16) a day
+  for the whole grove, with `GROVE_READ_USD` (default $0.03) per read. Reading tires a koala about
+  as much as playing.
+- **Research** (`research`, a question). Only at Library Isle. One separate `claude -p` call whose
+  only tool is web search, with its own budget (`GROVE_RESEARCH_USD`, default $0.10) and at most
+  `GROVE_RESEARCH_PER_DAY` (default 6) trips a day for the whole grove. It still can't touch files
+  or anything else on your computer.
+
+Both are offered in a koala's prompt whenever it is somewhere it can do them, and the prompt
+always says where the library is. What a koala learns goes into its **Learned** list (the last 8
+facts), separate from memories, and is told to the koalas nearby ("Crystal told you about ..."). Any
+idea can inspire what it builds. Like any decision, these calls are metered and count toward the
+daily cap.
 
 ### You, the visitor
 
@@ -168,7 +206,7 @@ real tokens and USD per koala, today and all time, from the CLI's own `result` u
 2026-11-04 with `claude-haiku-5-5` (58 real decisions, with resources, family and tickets in the
 prompt): about 3,350 tokens in, 570 out and $0.00073 per decision, the same per decision as before
 those were added. With the slower pacing when nothing is going on, two koalas cost roughly $0.08 to
-$0.15 an hour; a research trip costs at most $0.10.
+$0.15 an hour; a read costs at most $0.03 and a research trip at most $0.10.
 
 - The grove starts **paused**. Nothing is called until you press **Play** (or "Wake the koalas").
 - Even when playing, the koalas only think while a grove page is open and visible: the page
@@ -181,7 +219,8 @@ $0.15 an hour; a research trip costs at most $0.10.
 - Prompts are kept short: only places the koala can reach, its 6 newest events and 8 newest
   memories, and only the builds the Stockpile can pay for. Each koala's system prompt stays the
   same between calls, so it can be cached.
-- Research trips (the only calls with a tool) are limited to `GROVE_RESEARCH_PER_DAY`.
+- Research trips (the only calls with a tool) are limited to `GROVE_RESEARCH_PER_DAY`, and reads to
+  `GROVE_READS_PER_DAY`.
 - **Pause** stops new calls at once. Three failed calls in a row pause the grove by themselves.
 - `GROVE_DAY_USD` (default $0.50) caps today's real spend; once reached, the koalas rest until
   midnight. A call already running when the cap is hit still finishes, so the total can go over
@@ -212,13 +251,15 @@ All settings are environment variables.
 | `GROVE_DAY_USD` | `0.5` | Real spend per day after which the koalas stop thinking until midnight. |
 | `GROVE_CALL_USD` | `0.05` | Spending cap per decision, passed to `--max-budget-usd` (at most 1). |
 | `GROVE_BIN` | `CLAUDE_BIN`, else `claude` | The Claude Code executable the koalas call. |
-| `GROVE_RESEARCH_PER_DAY` | `3` | Research trips per day for the whole grove (1 to 50). |
+| `GROVE_RESEARCH_PER_DAY` | `6` | Research trips per day for the whole grove (1 to 50). |
 | `GROVE_RESEARCH_USD` | `0.1` | Spending cap per research trip, passed to `--max-budget-usd` (at most 1). |
+| `GROVE_READS_PER_DAY` | `16` | Reads per day for the whole grove (1 to 100). |
+| `GROVE_READ_USD` | `0.03` | Spending cap per read, passed to `--max-budget-usd` (at most 1). |
 
 ## Try it without spending tokens
 
 `test/fixtures/fake-koala.mjs` plays a koala: it answers with plausible random decisions,
-gathering, building, bridges, nests, tickets and research included (`FAKE_MODE` `ok`, `text`, `garbage`, `error`, `budget` or `hang`), so you can
+gathering, building, bridges, nests, tickets, reading and research included (`FAKE_MODE` `ok`, `text`, `garbage`, `error`, `budget` or `hang`), so you can
 watch the game with the meter counting made-up usage. That usage lands in `data/grove.sqlite`;
 delete the file afterwards so the meter shows only real spend again.
 
