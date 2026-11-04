@@ -158,6 +158,9 @@ new GLTFLoader().load('models/kit.glb', (gltf) => {
 // (tapered cylinders and pyramid roofs stay plain).
 function kitFor(q) {
   if (!kit) return null;
+  if (q.soft?.skip) return null;
+  const m = q.soft?.model && kit[q.soft.model];
+  if (m) return { geo: m, scale: q.soft.fit };
   if (q.type === 'box') return { geo: kit.box, scale: q.size };
   if (q.type === 'cyl' && Math.abs(q.size[0] - q.size[1]) < 0.01) return { geo: kit.cyl, scale: [q.size[0], q.size[2], q.size[0]] };
   if (q.type === 'cone' && q.size[2] >= 8) return { geo: kit.cone, scale: [q.size[0], q.size[1], q.size[0]] };
@@ -172,6 +175,10 @@ function plainGeo(q) {
 }
 function applyPrim(o, q) {
   const soft = kitFor(q);
+  const modelled = !!(soft && q.soft?.model && soft.geo === kit[q.soft.model]);
+  o.visible = !(kit && q.soft?.skip);
+  o.position.set(...(modelled && q.soft.pos ? q.soft.pos : q.pos));
+  o.rotation.set(...(modelled && q.soft.rot ? q.soft.rot : q.rot ?? [0, 0, 0]));
   o.geometry = soft ? soft.geo : plainGeo(q);
   o.scale.set(...(soft ? soft.scale : [1, 1, 1]));
   if (q.glow) {
@@ -190,8 +197,6 @@ MODELS.custom = (g, layer, b) => {
     o.userData.prim = q;
     applyPrim(o, q);
     if (!kit) waiting.add(o);
-    o.position.set(...q.pos);
-    if (q.rot) o.rotation.set(...q.rot);
     g.add(o);
     if (q.glow) {
       const glow = { glass: o };

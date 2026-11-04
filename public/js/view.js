@@ -209,7 +209,14 @@ export function customPlan(spec) {
   // Unit-scale authoring: size/pos given in medium metres, scaled here.
   const add = (type, size, pos, color, extra = {}) => {
     const s = type === 'box' ? [size[0] * w, size[1] * h, size[2] * w] : type === 'cyl' ? [size[0] * w, size[1] * w, size[2] * h] : type === 'cone' ? [size[0] * w, size[1] * h, size[2] ?? 8] : [size[0] * (w + h) / 2];
-    out.push({ type, size: s, pos: [pos[0] * w, pos[1] * h, pos[2] * w], color, ...extra });
+    const q = { type, size: s, pos: [pos[0] * w, pos[1] * h, pos[2] * w], color, ...extra };
+    // soft: a modelled piece (models/kit.glb) that stands in for this primitive when it is
+    // loaded; fit is its bounding box, pos/rot override the primitive's, skip drops the primitive.
+    if (extra.soft) {
+      const f = extra.soft.fit;
+      q.soft = { ...extra.soft, fit: f && [f[0] * w, f[1] * h, f[2] * w], pos: extra.soft.pos && [extra.soft.pos[0] * w, extra.soft.pos[1] * h, extra.soft.pos[2] * w] };
+    }
+    out.push(q);
   };
   const ctx = SHAPES[shape]({ add, col });
   const set = new Set(spec?.parts ?? []);
@@ -224,15 +231,15 @@ const GLASSY = '#bfe3f2';
 const SHAPES = {
   house: ({ add, col }) => {
     add('box', [1.8, 1.2, 1.6], [0, 0.6, 0], col(0));
-    add('cone', [1.45, 0.9, 4], [0, 1.65, 0], col(1), { rot: [0, Math.PI / 4, 0] });
-    add('box', [0.5, 0.85, 0.06], [0, 0.43, 0.82], DARKWOOD);
+    add('cone', [1.45, 0.9, 4], [0, 1.65, 0], col(1), { rot: [0, Math.PI / 4, 0], soft: { model: 'gable', fit: [2.3, 0.95, 2.0], rot: [0, 0, 0] } });
+    add('box', [0.5, 0.85, 0.06], [0, 0.43, 0.82], DARKWOOD, { soft: { model: 'door', fit: [0.55, 0.85, 0.14] } });
     return { hw: 0.9, hd: 0.8, top: 2.1, wallH: 1.2 };
   },
   tower: ({ add, col }) => {
     add('cyl', [0.75, 0.95, 3.2], [0, 1.6, 0], col(0));
     add('cyl', [1.05, 1.05, 0.2], [0, 3.3, 0], col(1));
     add('cone', [1.1, 1.0], [0, 3.9, 0], col(2));
-    return { hw: 0.9, hd: 0.9, top: 4.4, wallH: 3.2 };
+    return { hw: 0.8, hd: 0.9, top: 4.4, wallH: 3.2 };
   },
   machine: ({ add, col }) => {
     add('box', [1.6, 1.5, 1.0], [0, 0.85, 0], col(0));
@@ -255,7 +262,7 @@ const SHAPES = {
     add('box', [2.2, 0.3, 1.6], [0, 0.15, 0], col(0));
     add('box', [2.0, 0.12, 1.4], [0, 0.32, 0], DARKWOOD);
     add('sphere', [0.35], [-0.5, 0.55, -0.2], '#6f9a62');
-    for (let i = 0; i < 4; i++) add('sphere', [0.13], [-0.8 + i * 0.5, 0.5, 0.35], col(i + 1));
+    for (let i = 0; i < 4; i++) add('sphere', [0.13], [-0.8 + i * 0.5, 0.5, 0.35], col(i + 1), { soft: { model: 'flower', fit: [0.36, 0.17, 0.36] } });
     return { hw: 1.0, hd: 0.7, top: 0.7, wallH: 0.35 };
   },
   statue: ({ add, col }) => {
@@ -268,7 +275,7 @@ const SHAPES = {
   },
   shelter: ({ add, col }) => {
     for (const [x, z] of [[-0.9, -0.7], [0.9, -0.7], [-0.9, 0.7], [0.9, 0.7]]) add('cyl', [0.09, 0.11, 1.8], [x, 0.9, z], col(0));
-    add('cone', [1.7, 0.8, 4], [0, 2.2, 0], col(1), { rot: [0, Math.PI / 4, 0] });
+    add('cone', [1.7, 0.8, 4], [0, 2.2, 0], col(1), { rot: [0, Math.PI / 4, 0], soft: { model: 'pyramid', fit: [2.5, 0.8, 2.5], rot: [0, 0, 0] } });
     add('box', [1.5, 0.12, 0.4], [0, 0.4, -0.5], col(2));
     return { hw: 0.9, hd: 0.7, top: 2.6, wallH: 1.8 };
   },
@@ -282,30 +289,30 @@ const SHAPES = {
     return { hw: 1.0, hd: 0.5, top: 1.85, wallH: 1.8 };
   },
   boat: ({ add, col }) => {
-    add('box', [2.0, 0.5, 1.0], [0, 0.4, 0], col(0));
-    add('cone', [0.5, 0.5, 4], [1.2, 0.4, 0], col(0), { rot: [0, Math.PI / 4, -Math.PI / 2] });
+    add('box', [2.0, 0.5, 1.0], [0, 0.4, 0], col(0), { soft: { model: 'hull', fit: [2.4, 0.75, 1.05], pos: [0.1, 0.3, 0] } });
+    add('cone', [0.5, 0.5, 4], [1.2, 0.4, 0], col(0), { rot: [0, Math.PI / 4, -Math.PI / 2], soft: { skip: true } });
     add('cyl', [0.05, 0.06, 2.2], [0, 1.6, 0], DARKWOOD);
-    add('box', [0.04, 1.4, 0.9], [0, 1.65, 0.05], col(1));
+    add('box', [0.04, 1.4, 0.9], [0, 1.65, 0.05], col(1), { soft: { model: 'sail', fit: [1.0, 1.4, 0.12], pos: [0.5, 1.65, 0.04], rot: [0, 0, 0] } });
     return { hw: 1.0, hd: 0.5, top: 2.7, wallH: 0.7 };
   },
 };
 
 const PART_ORDER = ['roof', 'dome', 'chimney', 'door', 'window', 'screen', 'buttons', 'lights', 'wheel', 'slide', 'stairs', 'sign', 'flowers', 'bell', 'flag', 'star'];
 const PARTS = {
-  roof: ({ add, col }, c) => add('cone', [c.hw * 1.15, 0.5, 6], [0, c.top + 0.15, 0], col(2)),
-  dome: ({ add, col }, c) => add('sphere', [c.hw * 0.7], [0, c.top + 0.1, 0], col(1)),
-  chimney: ({ add, col }, c) => add('box', [0.3, 0.6, 0.3], [c.hw * 0.5, c.top, -c.hd * 0.3], col(2)),
-  door: ({ add }, c) => add('box', [0.45, 0.75, 0.08], [0, 0.38, c.hd + 0.05], DARKWOOD),
-  window: ({ add }, c) => { for (const s of [-1, 1]) add('box', [0.06, 0.35, 0.35], [s * (c.hw + 0.03), Math.max(0.5, c.wallH * 0.6), 0], GLASSY); },
+  roof: ({ add, col }, c) => add('cone', [c.hw * 1.15, 0.5, 6], [0, c.top + 0.15, 0], col(2), { soft: { model: 'pyramid', fit: [c.hw * 2.3, 0.5, c.hw * 2.3] } }),
+  dome: ({ add, col }, c) => add('sphere', [c.hw * 0.7], [0, c.top + 0.1, 0], col(1), { soft: { model: 'dome', fit: [c.hw * 1.4, c.hw * 0.7, c.hw * 1.4], pos: [0, c.top - 0.05 + c.hw * 0.35, 0] } }),
+  chimney: ({ add, col }, c) => add('box', [0.3, 0.6, 0.3], [c.hw * 0.5, c.top, -c.hd * 0.3], col(2), { soft: { model: 'chimney', fit: [0.34, 0.6, 0.34] } }),
+  door: ({ add }, c) => add('box', [0.45, 0.75, 0.08], [0, 0.38, c.hd + 0.05], DARKWOOD, { soft: { model: 'door', fit: [0.5, 0.78, 0.14] } }),
+  window: ({ add }, c) => { for (const s of [-1, 1]) add('box', [0.06, 0.35, 0.35], [s * (c.hw + 0.03), Math.max(0.5, c.wallH * 0.6), 0], GLASSY, { soft: { model: 'window', fit: [0.36, 0.36, 0.1], rot: [0, s * Math.PI / 2, 0] } }); },
   screen: ({ add }, c) => add('box', [0.7, 0.5, 0.06], [0, Math.max(0.6, c.wallH * 0.65), c.hd + 0.04], '#8fe3c0', { glow: true }),
   buttons: ({ add, col }, c) => { for (let i = 0; i < 3; i++) add('sphere', [0.07], [-0.25 + i * 0.25, Math.max(0.35, c.wallH * 0.3), c.hd + 0.06], col(i + 1)); },
   lights: ({ add }, c) => { for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add('sphere', [0.1], [x * c.hw * 0.9, c.top * 0.55, z * c.hd * 0.9], '#ffe08a', { glow: true }); },
-  wheel: ({ add, col }, c) => { for (const s of [-1, 1]) add('cyl', [0.3, 0.3, 0.12], [s * (c.hw + 0.05), 0.3, 0], col(1), { rot: [0, 0, Math.PI / 2] }); },
-  slide: ({ add, col }, c) => add('box', [0.5, 0.08, 1.4], [c.hw + 0.3, 0.55, 0.2], col(1), { rot: [0.6, 0, 0] }),
+  wheel: ({ add, col }, c) => { for (const s of [-1, 1]) add('cyl', [0.3, 0.3, 0.12], [s * (c.hw + 0.05), 0.3, 0], col(1), { rot: [0, 0, Math.PI / 2], soft: { model: 'wheel', fit: [0.14, 0.64, 0.64], rot: [0, 0, 0] } }); },
+  slide: ({ add, col }, c) => add('box', [0.5, 0.08, 1.4], [c.hw + 0.3, 0.55, 0.2], col(1), { rot: [0.6, 0, 0], soft: { model: 'slide', fit: [0.5, 0.2, 1.4] } }),
   stairs: ({ add, col }, c) => { for (let i = 0; i < 3; i++) add('box', [0.8, 0.14, 0.25], [0, 0.07 + i * 0.14, c.hd + 0.5 - i * 0.2], col(1)); },
   sign: ({ add, col }, c) => { add('cyl', [0.04, 0.04, 0.8], [-c.hw * 0.7, 0.4, c.hd + 0.4], DARKWOOD); add('box', [0.6, 0.3, 0.05], [-c.hw * 0.7, 0.85, c.hd + 0.4], col(2)); },
-  flowers: ({ add, col }, c) => { for (let i = 0; i < 4; i++) add('sphere', [0.1], [-0.6 + i * 0.4, 0.14, c.hd + 0.25], col(i + 1)); },
-  bell: ({ add }, c) => add('cone', [0.2, 0.28, 8], [0.3, c.top + 0.1, 0], '#d9a93a'),
-  flag: ({ add, col }, c) => { add('cyl', [0.03, 0.03, 1.0], [-c.hw * 0.6, c.top + 0.4, 0], DARKWOOD); add('box', [0.5, 0.3, 0.03], [-c.hw * 0.6 + 0.27, c.top + 0.75, 0], col(1)); },
-  star: ({ add }, c) => add('sphere', [0.18], [0, c.top + 0.9, 0], '#ffe27a', { glow: true }),
+  flowers: ({ add, col }, c) => { for (let i = 0; i < 4; i++) add('sphere', [0.1], [-0.6 + i * 0.4, 0.14, c.hd + 0.25], col(i + 1), { soft: { model: 'flower', fit: [0.3, 0.14, 0.3] } }); },
+  bell: ({ add }, c) => add('cone', [0.2, 0.28, 8], [0.3, c.top + 0.1, 0], '#d9a93a', { soft: { model: 'bell', fit: [0.38, 0.4, 0.38] } }),
+  flag: ({ add, col }, c) => { add('cyl', [0.03, 0.03, 1.0], [-c.hw * 0.6, c.top + 0.4, 0], DARKWOOD); add('box', [0.5, 0.3, 0.03], [-c.hw * 0.6 + 0.27, c.top + 0.75, 0], col(1), { soft: { model: 'pennant', fit: [0.5, 0.3, 0.05] } }); },
+  star: ({ add }, c) => add('sphere', [0.18], [0, c.top + 0.9, 0], '#ffe27a', { glow: true, soft: { model: 'star', fit: [0.5, 0.5, 0.14] } }),
 };
