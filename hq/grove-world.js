@@ -254,8 +254,14 @@ export function parseDecision(raw, koala, places = PLACES) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
   let action = ACTIONS.includes(obj.action) ? obj.action : 'sit';
   let target = text(obj.target, 40).toLowerCase();
+  let note = '';
   if (action === 'move') {
-    if (!places[target]) target = koala.place;
+    const island = places[target] ? null : ISLANDS.find((i) => i.id === target);
+    if (island) {
+      note = `You wanted to go to ${island.name}, but you can't reach ${island.name} yet; it needs a bridge (bridge_${island.id}).`;
+      action = 'sit';
+      target = '';
+    } else if (!places[target]) target = koala.place;
   } else if (action === 'eat' || action === 'climb') {
     if (!PLACES[target]?.tree) target = PLACES[koala.place]?.tree ? koala.place : TREES[0];
   } else if (action === 'play') {
@@ -289,6 +295,7 @@ export function parseDecision(raw, koala, places = PLACES) {
     bond,
     opinion: text(obj.opinion, 120),
     buildName: text(obj.build_name, 40),
+    note,
   };
 }
 
@@ -363,6 +370,7 @@ export function applyDecision(world, id, d) {
   const rest = others(world, id);
   const tell = (text, who = rest) => { for (const o of who) push(o.recent, text, MAX_RECENT); };
   let step = null;
+  if (d.note) push(k.recent, d.note, MAX_RECENT);
   let stored = null;
   let nested = false;
   if (d.action === 'build') {
@@ -386,6 +394,9 @@ export function applyDecision(world, id, d) {
     } else {
       k.res[d.target] = (k.res[d.target] ?? 0) + 1;
     }
+  } else if (d.action === 'give' && held(f) >= carryLimit(f.strength)) {
+    push(k.recent, `You wanted to give ${f.name} a ${d.target}, but ${f.name}'s paws are full.`, MAX_RECENT);
+    d = { ...d, action: 'sit', target: '' };
   } else if (d.action === 'nest') {
     const n = nestStep(world, id, world.minute ?? 0);
     if (n.refused) {
@@ -409,7 +420,7 @@ export function applyDecision(world, id, d) {
     case 'approach': k.place = f.place; break;
     case 'give':
       k.inventory.splice(k.inventory.indexOf(d.target), 1);
-      if (held(f) < carryLimit(f.strength)) f.inventory.push(d.target);
+      f.inventory.push(d.target);
       push(f.recent, `${k.name} gave you a ${d.target}.`, MAX_RECENT);
       break;
     default: break;

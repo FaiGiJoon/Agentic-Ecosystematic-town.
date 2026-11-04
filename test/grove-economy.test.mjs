@@ -65,7 +65,7 @@ test('store empties the paws into the stockpile, walking there first', () => {
 test('an unbridged island cannot be visited', () => {
   const w = world();
   const k = w.koalas.crystal;
-  assert.equal(parseDecision({ action: 'move', target: 'sandy_shoal' }, k, placesOf(w)).target, k.place);
+  assert.equal(parseDecision({ action: 'move', target: 'sandy_shoal' }, k, placesOf(w)).action, 'sit');
   assert.equal(placesOf(w).sandy_shoal, undefined);
 });
 
@@ -123,4 +123,11 @@ test('with nothing affordable, the prompt says how to get building again', () =>
   assert.match(p, /To build anything, first gather resources and store them in the Stockpile/);
   w.stock = { wood: 9 };
   assert.doesNotMatch(buildPrompt(w, 'crystal', groveClock(0)), /To build anything, first gather/);
+});
+
+test('review: heading for an unbridged island, the koala sits and learns it needs a bridge', () => {
+  const w = world();
+  act(w, 'crystal', { action: 'move', target: 'sandy_shoal' });
+  assert.equal(w.koalas.crystal.activity, 'sit');
+  assert.match(w.koalas.crystal.recent.join(' '), /Sandy Shoal yet; it needs a bridge/);
 });

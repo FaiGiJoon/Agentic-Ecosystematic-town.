@@ -386,3 +386,43 @@ test('research anywhere but Library Isle is refused without a call', async () =>
   assert.ok(!calls.some((c) => c.kind === 'research'));
   assert.match(grove.state().koalas[0].recent.join(' '), /only at Library Isle/);
 });
+
+test('review: talking nudges the friend and koalas nearby, not everyone in the grove', async () => {
+  const { grove, advance, now } = setup({ rng: () => 0, decide: (k) => ({ ok: true, raw: k === 'crystal' ? { action: 'sit', say: 'Hello!' } : { action: 'sit' }, usage: USAGE }) });
+  const base = grove.state().koalas[0];
+  grove.addKoala({ ...base, id: 'pip', name: 'Pip', parents: ['crystal', 'ruby'], follows: null, place: 'lookout', memories: [], recent: [] });
+  grove.play();
+  await openRound(grove, advance, 5000); // Crystal speaks; Pip (far away) is not due yet
+  await openRound(grove, advance, 2000); // Pip decides, quietly
+  const pip = grove.state().koalas.find((k) => k.id === 'pip');
+  assert.ok(pip.nextAt - now() >= 40000, `Pip was stirred by talk far away: waits ${pip.nextAt - now()} ms`);
+});
+
+test('review: no research trip once the daily cap is reached', async () => {
+  const research = [];
+  const { grove, calls, advance } = setup({
+    config: { dayUsd: 0.001 },
+    decide: (k, n) => (calls[n - 1].kind === 'research' ? (research.push(1), { ok: true, raw: { fact: 'x', idea: '' }, usage: USAGE })
+      : { ok: true, raw: k === 'crystal' ? { action: 'research', target: 'Why?' } : { action: 'sit' }, usage: USAGE }),
+  });
+  grove.world.builds = [{ id: 1, kind: 'bridge_library_isle', title: 'Bridge', plot: null, progress: 4, effort: 4, done: true, by: 'crystal', helpers: ['crystal'] }];
+  grove.world.koalas.crystal.place = 'library_isle';
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.equal(research.length, 0);
+});
+
+test('review: a baby is named once; its hunger follows its mother\'s', async () => {
+  const { grove, advance } = setup({ decide: (k) => ({ ok: true, raw: k === 'crystal' ? { action: 'eat', target: 'big_gum' } : { action: 'sit' }, usage: USAGE }) });
+  grove.world.baby = { due: 0, parents: ['crystal', 'ruby'] };
+  grove.play();
+  await openRound(grove, advance, 5000);
+  const pip = grove.state().koalas.find((k) => k.parents);
+  grove.nameKoala(pip.id, 'Opal');
+  const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
+  assert.equal(status(() => grove.nameKoala(pip.id, 'Crys')), 409);
+  grove.world.koalas[pip.id].hunger = 100;
+  await openRound(grove, advance, 70000);
+  const s = grove.state();
+  assert.equal(s.koalas.find((k) => k.id === pip.id).hunger, s.koalas.find((k) => k.id === 'crystal').hunger);
+});

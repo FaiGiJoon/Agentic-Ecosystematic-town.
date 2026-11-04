@@ -278,3 +278,24 @@ test('a third koala hears what is said and shows up in the others\' prompts', as
   assert.match(p, /Crystal is at/);
   assert.match(p, /Pip/);
 });
+
+test('review: a grown child is never offered a nest with its parent', async () => {
+  const { canNest } = await import('../hq/grove-family.js');
+  const w = world();
+  w.koalas.pip = { ...newKoala('crystal'), id: 'pip', name: 'Pip', parents: ['crystal', 'ruby'], follows: null };
+  for (const id of ['crystal', 'pip']) Object.assign(w.koalas[id], { strength: 80, bond: 90, place: 'hollow' });
+  assert.equal(canNest(w, 'pip', 'crystal').ok, false);
+  assert.doesNotMatch(buildPrompt(w, 'pip', groveClock(0)), /nest \(with/);
+});
+
+test('review: a gift to a friend with full paws stays with the giver', () => {
+  const w = world();
+  w.koalas.crystal.inventory = ['pebble'];
+  w.koalas.ruby.inventory = ['leaf', 'ball']; // a baby holds 2
+  applyDecision(w, 'crystal', parseDecision({ action: 'give', target: 'pebble' }, w.koalas.crystal));
+  assert.deepEqual(w.koalas.crystal.inventory, ['pebble']);
+  assert.deepEqual(w.koalas.ruby.inventory, ['leaf', 'ball']);
+  assert.equal(w.koalas.crystal.activity, 'sit');
+  assert.match(w.koalas.crystal.recent.join(' '), /paws are full/);
+  assert.doesNotMatch(w.koalas.ruby.recent.join(' '), /gave you/);
+});

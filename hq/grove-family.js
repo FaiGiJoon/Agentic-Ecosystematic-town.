@@ -21,6 +21,7 @@ export function canNest(world, a, b) {
   const ka = world.koalas[a];
   const kb = world.koalas[b];
   if (!ka || !kb) return { ok: false, why: 'there is nobody to nest with' };
+  if (ka.parents || kb.parents || a === b) return { ok: false, why: 'only Crystal and Ruby can start a family' };
   if (stageOf(ka.strength).id !== 'grown' || stageOf(kb.strength).id !== 'grown') return { ok: false, why: 'you both need to be grown-ups first' };
   if (ka.bond < LOVE || kb.bond < LOVE) return { ok: false, why: 'you need to love each other more first' };
   if (ka.place !== kb.place) return { ok: false, why: 'you need to be together in the same place' };

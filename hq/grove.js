@@ -10,7 +10,7 @@ import {
 } from './grove-world.js';
 import { koalaArgs, researchArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
-import { BABY_NAMES, bornBaby, graduates } from './grove-family.js';
+import { BABY_NAMES, babyPersona, bornBaby, graduates } from './grove-family.js';
 import { Tickets, MAX_OPEN_TICKETS } from './grove-tickets.js';
 
 export const GROVE_DEFAULTS = {
@@ -298,6 +298,10 @@ export class Grove {
   // Research happens only at Library Isle, a few times a day for the whole grove.
   #mayResearch(id) {
     const k = this.world.koalas[id];
+    if (this.capped) {
+      k.recent.push('You wanted to look something up, but the library is closed: the grove has used its tokens for today.');
+      return false;
+    }
     if (k.place !== 'library_isle') {
       k.recent.push('You wanted to look something up, but you can research only at Library Isle.');
       return false;
@@ -389,10 +393,10 @@ export class Grove {
   nameKoala(id, name) {
     const k = this.world.koalas[id];
     if (!k || !Object.hasOwn(this.world.koalas, id)) throw new GroveError(404, 'no such koala');
-    if (!k.parents || this.#minute() - (k.bornAt ?? 0) > 1440) throw new GroveError(409, 'only a newborn can be named');
     const t = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
     if (!t || t.length > 24) throw new GroveError(400, 'a name is 1 to 24 characters');
-    k.persona = String(k.persona ?? '').replaceAll(k.name, t);
+    if (!k.parents || k.named || this.#minute() - (k.bornAt ?? 0) > 1440) throw new GroveError(409, 'only a newborn can be named, once');
+    k.persona = babyPersona(this.world, k.parents, t, k.gender);
     k.name = t;
     k.named = true;
     for (const x of this.#all()) x.recent.push(`The visitor named the baby ${t}.`);
@@ -474,6 +478,8 @@ export class Grove {
     // babies go wherever the parent they follow goes
     for (const baby of this.#all().filter((x) => x.follows === id)) {
       baby.place = this.world.koalas[id].place;
+      baby.hunger = this.world.koalas[id].hunger; // fed and rested with its mother
+      baby.energy = Math.max(baby.energy, this.world.koalas[id].energy);
       baby.activity = this.world.koalas[id].activity === 'nap' ? 'nap' : 'sit';
     }
     for (const other of this.#all()) this.#save(other.id);
@@ -481,7 +487,8 @@ export class Grove {
     this.#setMeta('stock', this.world.stock);
     const friend = friendOf(this.world, id).id;
     if (decision.say) {
-      for (const o of this.#thinkers()) if (o.id !== id) this.#nudge(o.id);
+      const here = this.world.koalas[id].place;
+      for (const o of this.#thinkers()) if (o.id !== id && (o.id === friend || o.place === here)) this.#nudge(o.id);
     } else if (decision.action === 'give' || decision.action === 'approach') {
       this.#nudge(friend);
     }
