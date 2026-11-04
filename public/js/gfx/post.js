@@ -9,6 +9,19 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+
+// GTAO from the solid things only: grass, leaf cards, water, sky, particles and anything
+// see-through would make it crawl with the wind, so they are left out of its depth/normal pass.
+class GroundingAO extends GTAOPass {
+  overrideVisibility() {
+    super.overrideVisibility();
+    this.scene.traverse((o) => {
+      const m = o.material;
+      if (o.userData.noAO || o.isSprite || (m && (m.transparent || m.alphaTest > 0 || m.depthWrite === false))) o.visible = false;
+    });
+  }
+}
 
 const GradeShader = {
   uniforms: {
@@ -68,6 +81,12 @@ export class Post {
     c.setPixelRatio(this.dpr);
     c.setSize(this.size.x, this.size.y);
     c.addPass(new RenderPass(this.scene, this.camera));
+    // soft contact shading where things meet the ground: feet, trunks, rocks, builds
+    this.ao = new GroundingAO(this.scene, this.camera, this.size.x * this.dpr, this.size.y * this.dpr);
+    this.ao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
+    this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    this.ao.blendIntensity = 0.85;
+    c.addPass(this.ao);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(this.size.x, this.size.y), 0.34, 0.55, 1.05);
     c.addPass(this.bloom);
     this.grade = new ShaderPass(GradeShader);
@@ -84,6 +103,7 @@ export class Post {
     this.settings = settings;
     if (this.composer) {
       this.bloom.enabled = settings.bloom;
+      this.ao.enabled = !!settings.ao;
       this.grade.enabled = settings.grade;
       this.grade.uniforms.uSharpen.value = settings.sharpen;
     }

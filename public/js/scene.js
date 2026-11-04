@@ -194,7 +194,8 @@ export class GroveScene {
 
   // --- quality ----------------------------------------------------------------------------
   get settings() {
-    return SETTINGS[this.tier];
+    const step = this.ladder?.[this.step];
+    return step?.noAO ? { ...SETTINGS[this.tier], ao: false } : SETTINGS[this.tier];
   }
 
   // 'auto' lets the governor step the tier down and back up; a tier pins it.

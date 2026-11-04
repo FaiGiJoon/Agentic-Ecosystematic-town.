@@ -171,3 +171,14 @@ test('build plots are kept clear of trees and rocks', async () => {
     assert.equal(kept.blocked(p.x + 1.5, p.z - 1), true, p.id);
   }
 });
+
+test('ambient occlusion runs on High only, and is the first thing the governor gives up', () => {
+  assert.deepEqual(TIERS.map((t) => SETTINGS[t].ao), [false, false, true]);
+  const l = ladder('high');
+  assert.deepEqual(l[0], { tier: 'high', scale: 1 });
+  const off = l.findIndex((s) => s.noAO);
+  const lower = l.findIndex((s) => s.scale < 0.85 || s.tier !== 'high');
+  assert.ok(off > 0 && off < lower, `AO goes off at step ${off}, before step ${lower}`);
+  assert.ok(l.slice(off).filter((s) => s.tier === 'high').every((s) => s.noAO), 'and stays off further down');
+  assert.ok(ladder('medium').every((s) => !s.noAO));
+});
