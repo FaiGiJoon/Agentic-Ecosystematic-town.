@@ -2,7 +2,7 @@
 // panel (Koalas, Talk, Meter), the inspector card with the visitor's actions, and
 // the event feed. Model text is always inserted as text, never as HTML.
 
-import { fmtUsd, fmtTokens, statusOf, stockText } from './view.js';
+import { fmtUsd, fmtTokens, statusOf, stockText, panelStartsCollapsed } from './view.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -42,7 +42,7 @@ export function createUI({ scene, api }) {
   const modeBtn = $('#mode');
   const setMode = (m) => {
     scene.setCamera(m);
-    modeBtn.innerHTML = m === 'first' ? `${ICON('i-eye')}First person` : `${ICON('i-walk')}Third person`;
+    modeBtn.innerHTML = m === 'first' ? `${ICON('i-eye')}<span class="lbl">First person</span>` : `${ICON('i-walk')}<span class="lbl">Third person</span>`;
     modeBtn.title = m === 'first' ? 'Switch to third person (V)' : 'Switch to first person (V)';
     $('#hint').textContent = m === 'first'
       ? 'Drag to look · WASD or tap the grass to walk · E or tap a koala · V for third person'
@@ -166,6 +166,11 @@ export function createUI({ scene, api }) {
       for (const s of document.querySelectorAll('.tab-body')) s.hidden = s.id !== `tab-${tab}`;
       draw();
     });
+  }
+  // on mid-width screens the grove comes first: the panel starts tucked away
+  if (panelStartsCollapsed(innerWidth)) {
+    $('#panel').classList.add('collapsed');
+    scene.resize();
   }
   $('#panel-toggle').addEventListener('click', () => {
     $('#panel').classList.toggle('collapsed');

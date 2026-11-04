@@ -264,7 +264,36 @@ h3 { color: var(--muted); }
 
 button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
 
+/* ---------- finish: one easing curve, layered glass, motion that explains a change ---------- */
+:root {
+  --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+.brand, .chip, .back, .iconbtn, .playbtn, #panel, #inspector, .intro-card, #name-baby, #settings-pop, #time-pop {
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  backdrop-filter: blur(16px) saturate(1.35);
+  box-shadow: var(--glass-hi), var(--shadow);
+}
+.playbtn.on { box-shadow: 0 0 0 4px rgba(159, 211, 176, 0.2), var(--glass-hi), var(--shadow); }
+.chip b, .stat .v, .spend b, .khead .next, .bmeta, .row .meta, .bhead span, #clock { font-variant-numeric: tabular-nums; }
+.chip, .playbtn, .back, .iconbtn, .tabs button, .btn, .item, .seg button { transition: background 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), transform 0.12s var(--ease), box-shadow 0.2s var(--ease); }
+.kcard, .bcard, .tcard { transition: background 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.2s var(--ease); }
+.kcard:hover { transform: translateY(-1px); }
+#panel { transition: transform 0.38s var(--ease); }
+.tab-body:not([hidden]) { animation: hud-in 0.28s var(--ease); }
+#inspector:not([hidden]), #settings-pop:not([hidden]), #time-pop:not([hidden]), #name-baby:not([hidden]) { animation: hud-rise 0.3s var(--ease); }
+.ev { animation: hud-slide 0.35s var(--ease); }
+@keyframes hud-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes hud-rise { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes hud-slide { from { opacity: 0; transform: translateX(-12px); } }
+#name-baby:not([hidden]) { animation-name: hud-rise-center; }
+@keyframes hud-rise-center { from { opacity: 0; transform: translate(-50%, 10px); } }
+.tabs button.on { box-shadow: inset 0 -2px 0 var(--mint); }
+.bar, .bond { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
+
 @media (prefers-reduced-motion: reduce) {
+  .tab-body, #inspector, #settings-pop, #time-pop, #name-baby, .ev { animation: none !important; }
+
   .zzz span, .chip.status.thinking i { animation: none; opacity: 1; }
   * { transition: none !important; }
 }
@@ -290,4 +319,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
   .intro-card { padding: 24px 22px; }
   .intro-card h1 { font-size: 36px; }
   #toast { max-width: calc(100vw - 32px); text-align: center; }
+  /* one sideways-scrolling row of chips instead of a stack that covers the grove */
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; order: 3; width: 100%; padding-bottom: 2px; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips .chip, .chips .chip:nth-child(n + 3) { display: inline-flex; flex: 0 0 auto; }
+  #mode .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* icon only; still read out */
+  #mode { width: 44px; padding: 0; justify-content: center; }
 }

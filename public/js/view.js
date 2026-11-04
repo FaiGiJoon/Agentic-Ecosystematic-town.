@@ -178,3 +178,10 @@ export function glide(speed, distance, dt, { max, accel }) {
   const step = Math.min(distance, v * dt);
   return { speed: step === distance ? 0 : v, step };
 }
+
+// --- layout ------------------------------------------------------------------------------
+// Between phone and wide desktop the 400 px panel would cover a third of the view: start with
+// it tucked away (one click opens it). Phones get the bottom sheet instead.
+export function panelStartsCollapsed(width) {
+  return width > 820 && width < 1100;
+}
