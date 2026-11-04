@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
+import { panelStartsCollapsed, postureFor, critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
 import { PLACES } from '../hq/grove-world.js';
 
 test('koalas at the same place stand apart, and stand beside the pond, not in it', () => {
@@ -130,4 +130,29 @@ test('critters keep to their homes: turtles crawl, frogs hop by the pond, birds 
   // they move
   assert.notDeepEqual(critterPath('turtle', 0, home), critterPath('turtle', 20, home));
   assert.ok(Array.from({ length: 40 }, (_, i) => critterPath('frog', i * 0.25, home).y).some((y) => y > 0.1), 'frogs hop');
+});
+
+test('koala postures follow koala life: fork wedge up a tree, ball curl in the night cold, tree hug in the midday heat', () => {
+  assert.equal(postureFor({ anim: 'sleep', place: 'big_gum', hour: 14, inTree: true }), 'fork');
+  assert.equal(postureFor({ anim: 'sleep', place: 'hollow', hour: 23, inTree: false }), 'curl');
+  assert.equal(postureFor({ anim: 'sleep', place: 'hollow', hour: 6, inTree: false }), 'curl', 'the cold early morning');
+  assert.equal(postureFor({ anim: 'sleep', place: 'hollow', hour: 13, inTree: false }), 'sleep');
+  assert.equal(postureFor({ anim: 'cling', place: 'river_gum', hour: 13, inTree: true }), 'hug');
+  assert.equal(postureFor({ anim: 'cling', place: 'river_gum', hour: 9, inTree: true }), 'cling');
+  assert.equal(postureFor({ anim: 'eat', place: 'big_gum', hour: 13, inTree: true }), 'eat');
+  assert.equal(postureFor({ anim: 'walk', place: 'pond', hour: 2, inTree: false }), 'walk');
+});
+
+test('a koala napping at a gum tree wedges into a fork up the trunk, as high as it can climb', () => {
+  const low = spotFor(PLACES, 'big_gum', 'crystal', 'nap', 0.35);
+  assert.ok(low.y > 0.5 && low.y < 2.5, `fork at ${low.y}`);
+  assert.ok(spotFor(PLACES, 'big_gum', 'crystal', 'nap', 1).y > low.y);
+  assert.equal(spotFor(PLACES, 'hollow', 'crystal', 'nap').y, 0, 'no tree: on the ground');
+});
+
+test('the side panel starts tucked away when it would cover too much of the grove', () => {
+  assert.equal(panelStartsCollapsed(1400), false, 'wide desktop: room for both');
+  assert.equal(panelStartsCollapsed(2560), false);
+  assert.equal(panelStartsCollapsed(1000), true, 'narrow desktop or tablet: the grove comes first');
+  assert.equal(panelStartsCollapsed(375), false, 'phones use the bottom sheet instead');
 });

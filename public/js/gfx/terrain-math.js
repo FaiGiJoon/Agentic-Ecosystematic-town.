@@ -2,7 +2,7 @@
 // worn-path coverage, and where trees may grow. The terrain mesh, the splat texture,
 // the vegetation scatter and the koalas' footing all read these same numbers.
 
-import { fbm, smoothstep } from './noise.js';
+import { fbm, smoothstep, rng } from './noise.js';
 
 export const ISLAND = 24;
 export const POND_R = 4.6;
@@ -81,4 +81,36 @@ export function makeTerrain(places, { clear = [] } = {}) {
   }
 
   return { height, pathMask, blocked, ISLAND, POND_R, SHORE_R };
+}
+
+// Where the bushland extras stand, the same every time for a seed: four paperbarks (Melaleuca,
+// they like wet feet) on the pond's bank, and three termite mounds out on open grass, all clear
+// of places, plots, paths, trees in `avoid` and each other.
+export function bushlandSpots(T, places, { avoid = [], seed = 5 } = {}) {
+  const r = rng(seed * 977 + 13);
+  const pond = places.pond;
+  const taken = [...avoid];
+  const free = (x, z, gap) => taken.every((q) => Math.hypot(q.x - x, q.z - z) > gap);
+  const paperbarks = [];
+  for (let i = 0; i < 400 && paperbarks.length < 4; i++) {
+    const a = r() * Math.PI * 2;
+    const d = SHORE_R + 1.6 + r() * 3;
+    const x = pond.x + Math.cos(a) * d;
+    const z = pond.z + Math.sin(a) * d;
+    if (T.blocked(x, z, 0.2) || !free(x, z, 2.6)) continue;
+    paperbarks.push({ x, z, yaw: r() * Math.PI * 2, k: 0.85 + r() * 0.35 });
+    taken.push({ x, z });
+  }
+  const mounds = [];
+  for (let i = 0; i < 600 && mounds.length < 3; i++) {
+    const a = r() * Math.PI * 2;
+    const d = 6 + r() * (ISLAND - 10);
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d;
+    if (T.blocked(x, z, 1) || !free(x, z, 3.2)) continue;
+    if (Object.values(places).some((q) => Math.hypot(q.x - x, q.z - z) < 3.2)) continue;
+    mounds.push({ x, z, yaw: r() * Math.PI * 2, k: 0.8 + r() * 0.45 });
+    taken.push({ x, z });
+  }
+  return { paperbarks, mounds };
 }

@@ -8,17 +8,18 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
+import { spotFor, animFor, postureFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
+import { gradeAt } from './gfx/grade.js';
 import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
-import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
+import { makeTerrain, bushlandSpots, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
 import { shared, groundMaterial, waterMaterial, RIPPLES } from './gfx/materials.js';
 import { Sky } from './gfx/sky.js';
 import { buildSplat, buildLawn, buildCliff, buildRoots, buildIslet } from './gfx/terrain.js';
 import { buildGrass, eucalypt, treeMeshes, leafMaterials, rockGeometry, rockMaterial, fernMesh, bushShape, flowerMeshes } from './gfx/flora.js';
-import { buildProps, animatePond } from './gfx/props.js';
+import { buildProps, buildMounds, animatePond } from './gfx/props.js';
 import { Effects, buildAmbient } from './gfx/particles.js';
 import { Post } from './gfx/post.js';
 import { rng } from './gfx/noise.js';
@@ -38,7 +39,8 @@ const smooth = (a, b, x) => {
 };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const BARK = ['#e9e0d1', '#d8c8b2', '#cfc6bd', '#e4d3c0', '#c9bba6'].map((c) => new THREE.Color(c));
+// smooth pale gums, and a few rough, dark stringybarks among them
+const BARK = ['#e9e0d1', '#d8c8b2', '#cfc6bd', '#e4d3c0', '#c9bba6', '#8f7259', '#7d644f'].map((c) => new THREE.Color(c));
 const LEAF = ['#8aa67c', '#7a9a70', '#98b085', '#8fa97a', '#86a58a', '#a1b58c', '#7d9c78'].map((c) => new THREE.Color(c));
 // The three named gums keep their own look.
 const HERO = {
@@ -193,7 +195,8 @@ export class GroveScene {
 
   // --- quality ----------------------------------------------------------------------------
   get settings() {
-    return SETTINGS[this.tier];
+    const step = this.ladder?.[this.step];
+    return step?.noAO ? { ...SETTINGS[this.tier], ao: false } : SETTINGS[this.tier];
   }
 
   // 'auto' lets the governor step the tier down and back up; a tier pins it.
@@ -275,6 +278,8 @@ export class GroveScene {
     }
 
     lap('forest-spots');
+    // paperbarks on the pond bank and termite mounds in the open (koala bushland)
+    this.bush = bushlandSpots(T, places, { avoid: forest, seed: 5 });
     // 2. props, rocks, bushes, ferns, flowers: their positions also bake occlusion into the ground
     const props = buildProps({ places, terrain: T, tex, rand });
     this.props = props;
@@ -363,6 +368,8 @@ export class GroveScene {
       ...rocks.map((o) => ({ x: o.x, z: o.z, r: o.k * 2.4 + 0.4, s: 0.5 })),
       ...props.rockSpots.map((o) => ({ x: o.x, z: o.z, r: o.r * 2.4 + 0.3, s: 0.45 })),
       ...bushes.map((b) => ({ x: b.x, z: b.z, r: b.k * 1.6 + 0.4, s: 0.5 })),
+      ...this.bush.paperbarks.map((t) => ({ x: t.x, z: t.z, r: 1.8, s: 0.6 })),
+      ...this.bush.mounds.map((m) => ({ x: m.x, z: m.z, r: 1.7 * m.k, s: 0.65 })),
     ];
     const splat = buildSplat({ terrain: T, size: S.texSize, blobs, caps: props.caps });
     lap('splat');
@@ -442,6 +449,13 @@ export class GroveScene {
       this.forest.push(g);
     });
 
+    // paperbarks: slender, pale papery bark, narrow grey-green leaves
+    const paper = eucalypt({ seed: 71, height: 5.4, trunkR: 0.3, lean: 0.9, branches: 7, clusters: 18, cards: 14 });
+    group.add(treeMeshes({
+      shape: paper, mats, barkMat,
+      instances: this.bush.paperbarks.map((t) => ({ x: t.x, y: T.height(t.x, t.z), z: t.z, yaw: t.yaw, scale: t.k, bark: new THREE.Color('#f6f1e6'), leaf: new THREE.Color('#90a593') })),
+    }));
+    group.add(buildMounds({ spots: this.bush.mounds, terrain: T, tex }));
     lap('trees+islets');
     // 6. ground cover
     group.add(fernMesh({ spots: ferns, tex, terrain: T }));
@@ -697,10 +711,10 @@ export class GroveScene {
       }
       this.#carry(view, carried(k));
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
-      const anim = animFor(k);
+      const anim = postureFor({ anim: animFor(k), hour: state.clock.hour, inTree: spot.y > 0.3 });
       view.setGoal(spot, anim, this.walk(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
-      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
+      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build', fork: 'nap', curl: 'nap', hug: 'climb' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
   }
@@ -762,7 +776,7 @@ export class GroveScene {
     const p = this.places[k.place];
     if (!p) return null;
     const toward = (x, z) => Math.atan2(x - spot.x, z - spot.z);
-    if (p.tree && (k.activity === 'climb' || k.activity === 'eat')) return toward(p.x, p.z);
+    if (p.tree && (k.activity === 'climb' || k.activity === 'eat' || k.activity === 'nap')) return toward(p.x, p.z);
     if (k.place === 'pond') return toward(p.x, p.z);
     if (k.place === 'swing' && k.activity === 'play') return 0;
     if (p.build && k.activity === 'build') return toward(p.x, p.z);
@@ -899,10 +913,12 @@ export class GroveScene {
     this.renderer.toneMappingExposure = 0.9 + 0.38 * day;
     this.shroomMat.emissiveIntensity = pal.night * 2.2;
     this.lanternLight.intensity = pal.night * 8;
-    this.lanternGlass.material.emissiveIntensity = 0.5 + pal.night * 3;
+    this.lanternGlass.material.emissiveIntensity = 0.5 + pal.night * 4.5; // bright enough to bloom
     this.ambient.u.uTime.value = t;
     this.ambient.u.uNight.value = pal.night;
     this.ambient.u.uDay.value = day * smooth(0.0, 0.25, el);
+    // golden hour: low warm sun, the air full of glinting dust
+    this.ambient.u.uGolden.value = day * (1 - smooth(0.12, 0.45, el)) * smooth(0.0, 0.08, el);
     this.ambient.u.uScale.value = this.pxScale;
     this.night = pal.night;
     this.sunUp = sunUp;
@@ -910,6 +926,7 @@ export class GroveScene {
     this.post.look({
       tint: new THREE.Color(1, 1, 1).lerp(new THREE.Color(1.07, 0.97, 0.86), tw * 0.8).lerp(new THREE.Color(0.86, 0.93, 1.06), pal.night * 0.6),
       night: pal.night,
+      grade: gradeAt(frac),
     });
     for (const b of this.blobs) b.mesh.material.opacity = 0.35 + 0.35 * day * sunUp + 0.12;
     this.sky.updateEnv(performance.now(), this.envEvery);
@@ -996,7 +1013,7 @@ export class GroveScene {
         const f = list.find((o) => o !== v);
         const df = Math.hypot(f.pos.x - v.pos.x, f.pos.z - v.pos.z);
         const dv = Math.hypot(vp.x - v.pos.x, vp.z - v.pos.z);
-        const look = dv < 4 && v.anim !== 'sleep' ? vp : df < 7 ? f.pos : { x: v.pos.x * 1.5, z: v.pos.z * 1.5 + 4 };
+        const look = dv < 4 && !['sleep', 'fork', 'curl'].includes(v.anim) ? vp : df < 7 ? f.pos : { x: v.pos.x * 1.5, z: v.pos.z * 1.5 + 4 };
         const want = Math.atan2(look.x - v.pos.x, look.z - v.pos.z);
         let d = want - v.heading;
         d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -1091,7 +1108,7 @@ export class GroveScene {
     this.fx.update(dt, this.pxScale);
     if (this.reduced) return;
     // gum leaves loosen and drift down from the big trees by day
-    if ((this.fxTimers.leaf += dt) > 0.7 && this.night < 0.6) {
+    if ((this.fxTimers.leaf += dt) > 0.45 && this.night < 0.6) {
       this.fxTimers.leaf = 0;
       const ids = Object.keys(this.trees ?? {});
       const p = this.places[ids[Math.floor(Math.random() * ids.length)]];

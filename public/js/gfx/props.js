@@ -293,3 +293,39 @@ export function animatePond(props, t, terrain) {
   });
   props.bloomMesh.instanceMatrix.needsUpdate = true;
 }
+
+// Termite mounds: lumpy spires of baked ochre earth, a tall one with two smaller at its side.
+// The surface is pushed in and out by the vertex position, so the lathe seam stays closed.
+export function buildMounds({ spots, terrain, tex }) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: '#b86d3e', map: tex.rock.map, normalMap: tex.rock.normal, normalScale: new THREE.Vector2(1.6, 1.6), roughness: 0.98 });
+  spots.forEach((s, i) => {
+    const mound = new THREE.Group();
+    const spire = (h, rad, x, z) => {
+      const pts = [];
+      for (let j = 0; j <= 12; j++) {
+        const t = j / 12;
+        pts.push(new THREE.Vector2(rad * (1 - t ** 1.35) * (0.86 + 0.14 * Math.sin(t * 9 + i)) + 0.05, t * h));
+      }
+      const geo = new THREE.LatheGeometry(pts, 16);
+      const p = geo.attributes.position;
+      for (let v = 0; v < p.count; v++) {
+        const px = p.getX(v), py = p.getY(v), pz = p.getZ(v);
+        const n = Math.sin(px * 7.1 + py * 3.3 + i) * Math.cos(pz * 6.7 - py * 2.1) * 0.09 * rad;
+        const len = Math.hypot(px, pz) || 1;
+        p.setX(v, px + (px / len) * n);
+        p.setZ(v, pz + (pz / len) * n);
+      }
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, -0.06, z);
+      return m;
+    };
+    const k = s.k;
+    mound.add(spire(1.9 * k, 0.85 * k, 0, 0), spire(1.15 * k, 0.5 * k, 0.6 * k, 0.25 * k), spire(0.8 * k, 0.4 * k, -0.45 * k, -0.4 * k));
+    mound.position.set(s.x, terrain.height(s.x, s.z), s.z);
+    mound.rotation.y = s.yaw;
+    g.add(mound);
+  });
+  return shadowy(g);
+}

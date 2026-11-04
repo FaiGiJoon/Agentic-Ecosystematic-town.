@@ -171,3 +171,37 @@ test('build plots are kept clear of trees and rocks', async () => {
     assert.equal(kept.blocked(p.x + 1.5, p.z - 1), true, p.id);
   }
 });
+
+test('ambient occlusion runs on High only, and is the first thing the governor gives up', () => {
+  assert.deepEqual(TIERS.map((t) => SETTINGS[t].ao), [false, false, true]);
+  const l = ladder('high');
+  assert.deepEqual(l[0], { tier: 'high', scale: 1 });
+  const off = l.findIndex((s) => s.noAO);
+  const lower = l.findIndex((s) => s.scale < 0.85 || s.tier !== 'high');
+  assert.ok(off > 0 && off < lower, `AO goes off at step ${off}, before step ${lower}`);
+  assert.ok(l.slice(off).filter((s) => s.tier === 'high').every((s) => s.noAO), 'and stays off further down');
+  assert.ok(ladder('medium').every((s) => !s.noAO));
+});
+
+test('bushland: paperbarks stand on the pond bank, termite mounds out on open grass, clear of everything', async () => {
+  const { bushlandSpots, SHORE_R: SR } = await import('../public/js/gfx/terrain-math.js');
+  const { PLACES: P, PLOTS } = await import('../hq/grove-world.js');
+  const T = makeTerrain(P, { clear: PLOTS.filter((p) => !p.land) });
+  const forest = [{ x: -6, z: -10 }, { x: 12, z: -14 }];
+  const s = bushlandSpots(T, P, { avoid: forest, seed: 5 });
+  assert.equal(s.paperbarks.length, 4);
+  assert.equal(s.mounds.length, 3);
+  for (const b of s.paperbarks) {
+    const d = Math.hypot(b.x - P.pond.x, b.z - P.pond.z);
+    assert.ok(d > SR + 1.4 && d < SR + 5, `paperbark ${d} m from the pond`);
+    assert.equal(T.blocked(b.x, b.z, 0.2), false);
+  }
+  for (const m of s.mounds) {
+    assert.equal(T.blocked(m.x, m.z, 1), false);
+    for (const q of [...Object.values(P), ...PLOTS.filter((p) => !p.land)]) assert.ok(Math.hypot(m.x - q.x, m.z - q.z) > 3, 'mound clear of places and plots');
+    for (const f of forest) assert.ok(Math.hypot(m.x - f.x, m.z - f.z) > 3, 'mound clear of trees');
+  }
+  const all = [...s.paperbarks, ...s.mounds];
+  for (const a of all) for (const b of all) if (a !== b) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 2.5, 'not on top of each other');
+  assert.deepEqual(bushlandSpots(T, P, { avoid: forest, seed: 5 }), s, 'the same grove every time');
+});
