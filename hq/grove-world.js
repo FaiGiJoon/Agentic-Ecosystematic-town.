@@ -27,6 +27,10 @@ export const KOALAS = [
   },
 ];
 
+import {
+  RESOURCES, ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
+} from './grove-economy.js';
+
 // The koalas used to be called Mallee and Bramble; old groves are renamed on start.
 export const RENAMED = { mallee: 'crystal', bramble: 'ruby' };
 export function migrateNames(text) {
@@ -44,10 +48,11 @@ export const PLACES = {
   hollow: { name: 'Mossy Hollow', x: -15, z: -1 },
   lookout: { name: 'Lookout Rock', x: 14, z: 12 },
   flowers: { name: 'Blossom Patch', x: -2, z: 13 },
+  stockpile: { name: 'Stockpile', x: 2.6, z: 4.4 },
 };
 
 export const ITEMS = ['leaf', 'blossom', 'pebble', 'ball', 'feather'];
-export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'build', 'sit'];
+export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
 // the same site. A finished build stands at its plot and becomes a place to visit.
@@ -60,6 +65,10 @@ export const BLUEPRINTS = {
   hut: { name: 'Leaf Hut', effort: 5 },
   treehouse: { name: 'Treehouse', effort: 6 },
   tower: { name: 'Lookout Tower', effort: 6 },
+  well: { name: 'Well', effort: 4 },
+  reading_nook: { name: 'Reading Nook', effort: 3 },
+  // one bridge per resource island; it stands at the island's edge, not on a plot
+  ...Object.fromEntries(ISLANDS.map((i) => [`bridge_${i.id}`, { name: `Bridge to ${i.name}`, effort: 4, bridge: i.id }])),
 };
 const MAX_OPEN = 2;
 // New land: every LAND_EVERY finished builds, the next piece rises from the water off the island.
@@ -93,7 +102,7 @@ export const STAGES = [
   { id: 'grown', label: 'Grown-up', at: 75 },
 ];
 export const START_STRENGTH = 5;
-const TRAIN = { climb: 2, play: 1.5, build: 1.5, eat: 1, nap: 0.5, move: 0.2, approach: 0.1 }; // strength per action
+const TRAIN = { climb: 2, play: 1.5, build: 1.5, eat: 1, gather: 0.5, nap: 0.5, move: 0.2, approach: 0.1 }; // strength per action
 const PRONOUNS = { girl: 'she/her', boy: 'he/him' };
 
 export const DECISION_SCHEMA = {
@@ -156,6 +165,7 @@ export function newKoala(id) {
     energy: 80,
     strength: START_STRENGTH,
     inventory: [],
+    res: {}, // resources in paws: { wood: 2 }
     bond: 0,
     opinion: '',
     memories: [],
@@ -186,9 +196,17 @@ export function freePlots(world) {
 export function placesOf(world) {
   const out = { ...PLACES };
   for (const l of landOf(world)) out[l.id] = { name: l.name, x: l.x, z: l.z, land: true };
+  const open = bridged(world);
+  for (const i of ISLANDS) if (open.has(i.id)) out[i.id] = { name: i.name, x: i.x, z: i.z, island: true, resource: i.resource };
   for (const b of world.builds ?? []) {
-    const p = plotById(b.plot);
-    out[b.plot] = { name: b.done ? b.title : `${b.title} (being built)`, x: p.x, z: p.z, build: b.kind, done: b.done };
+    const name = b.done ? b.title : `${b.title} (being built)`;
+    if (b.plot) {
+      const p = plotById(b.plot);
+      out[b.plot] = { name, x: p.x, z: p.z, build: b.kind, done: b.done };
+    } else {
+      const foot = bridgeFoot(ISLANDS.find((i) => `bridge_${i.id}` === b.kind));
+      out[b.kind] = { name, x: foot.x, z: foot.z, bridge: true, done: b.done };
+    }
   }
   return out;
 }
@@ -221,6 +239,11 @@ export function parseDecision(raw, koala, places = PLACES) {
     }
   } else if (action === 'build') {
     if (!BLUEPRINTS[target]) target = ''; // keep working on what is underway
+  } else if (action === 'gather') {
+    if (!RESOURCES.includes(target)) {
+      action = 'sit';
+      target = '';
+    }
   } else {
     target = '';
   }
@@ -264,27 +287,36 @@ function buildStep(world, k, f, d) {
     ? open.find((x) => x.kind === d.target)
     : open.find((x) => x.plot === k.place) ?? open.find((x) => x.by === k.id) ?? open[0];
   let started = false;
-  if (!b && BLUEPRINTS[d.target] && open.length < MAX_OPEN) {
+  const bp = BLUEPRINTS[d.target];
+  // a bridge is built once; asking again just helps with whatever is underway
+  const wanted = bp && !(bp.bridge && world.builds.some((x) => x.kind === d.target));
+  if (!b && wanted && open.length < MAX_OPEN) {
     const here = placesOf(world)[k.place] ?? PLACES.clearing;
     const dist = (p) => Math.hypot(p.x - here.x, p.z - here.z);
-    const plot = freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
-    if (plot) {
-      const bp = BLUEPRINTS[d.target];
-      b = { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot.id, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
+    const plot = bp.bridge ? null : freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
+    if (bp.bridge || plot) {
+      const pay = canAfford(stockOf(world), costOf(d.target));
+      if (!pay.ok) return { missing: pay.missing, title: bp.name };
+      spend(stockOf(world), costOf(d.target));
+      b = { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot?.id ?? null, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
       world.builds.push(b);
       started = true;
     }
   }
   if (!b && open.length) b = open[0];
   if (!b) return null;
-  const together = f.place === b.plot && f.activity === 'build';
+  const site = siteOf(b);
+  const together = f.place === site && f.activity === 'build';
   b.progress = Math.min(b.effort, b.progress + (together ? 2 : 1));
   if (!b.helpers.includes(k.id)) b.helpers.push(k.id);
-  k.place = b.plot;
+  k.place = site;
   const landBefore = landOf(world).length;
   if (b.progress >= b.effort) b.done = true;
   return { b, started, together, newLand: landOf(world).slice(landBefore) };
 }
+
+// Where a build stands: its plot, or for a bridge its own place at the island's edge.
+const siteOf = (b) => b.plot ?? b.kind;
 
 function describeBuild({ b, started, together }) {
   if (started) return `started building the ${b.title} (${b.progress} of ${b.effort} done)`;
@@ -296,12 +328,33 @@ export function applyDecision(world, id, d) {
   const k = world.koalas[id];
   const f = world.koalas[other(id).id];
   let step = null;
+  let stored = null;
   if (d.action === 'build') {
     step = buildStep(world, k, f, d);
-    if (!step) {
+    if (step?.missing) {
+      push(k.recent, `You wanted to build a ${step.title}, but it needs ${amounts(step.missing).replace(/(\d+) /g, '$1 more ')}. Gather some and store it in the Stockpile.`, MAX_RECENT);
+      step = null;
+      d = { ...d, action: 'sit', target: '' };
+    } else if (!step) {
       push(k.recent, 'You wanted to build, but there is no room left to build anything new.', MAX_RECENT);
       d = { ...d, action: 'sit', target: '' };
     }
+  } else if (d.action === 'gather') {
+    k.res ??= {};
+    if (!(SOURCES[k.place] ?? []).includes(d.target)) {
+      push(k.recent, `You looked for ${d.target}, but there is no ${d.target} here.`, MAX_RECENT);
+      d = { ...d, action: 'sit', target: '' };
+    } else if (held(k) >= carryLimit(k.strength)) {
+      push(k.recent, 'You tried to gather more, but your paws are full. Store what you carry first.', MAX_RECENT);
+      d = { ...d, action: 'sit', target: '' };
+    } else {
+      k.res[d.target] = (k.res[d.target] ?? 0) + 1;
+    }
+  } else if (d.action === 'store') {
+    k.place = 'stockpile';
+    stored = { ...(k.res ?? {}) };
+    add(stockOf(world), stored);
+    k.res = {};
   }
   const places = placesOf(world);
   switch (d.action) {
@@ -310,7 +363,7 @@ export function applyDecision(world, id, d) {
     case 'approach': k.place = f.place; break;
     case 'give':
       k.inventory.splice(k.inventory.indexOf(d.target), 1);
-      if (f.inventory.length < carryLimit(f.strength)) f.inventory.push(d.target);
+      if (held(f) < carryLimit(f.strength)) f.inventory.push(d.target);
       push(f.recent, `${k.name} gave you a ${d.target}.`, MAX_RECENT);
       break;
     default: break;
@@ -322,6 +375,7 @@ export function applyDecision(world, id, d) {
     k.hunger = clamp(k.hunger + 4, 0, 100);
   }
   if (d.action === 'climb') k.energy = clamp(k.energy - 8 * fatigue(k.strength), 0, 100);
+  if (d.action === 'gather') k.energy = clamp(k.energy - 3 * fatigue(k.strength), 0, 100);
   if (d.action === 'build') {
     k.energy = clamp(k.energy - 6 * fatigue(k.strength), 0, 100);
     k.hunger = clamp(k.hunger + 4, 0, 100);
@@ -337,7 +391,10 @@ export function applyDecision(world, id, d) {
   if (d.opinion) k.opinion = d.opinion;
   if (d.remember) push(k.memories, d.remember, MAX_MEMORIES);
 
-  const did = step ? describeBuild(step) : describe(d, f.name, k.strength, places);
+  const did = step ? describeBuild(step)
+    : d.action === 'gather' ? `gathered ${d.target} at the ${places[k.place]?.name ?? k.place}`
+    : stored ? (Object.keys(stored).length ? `stored ${amounts(stored)} in the Stockpile` : 'went to the Stockpile with empty paws')
+    : describe(d, f.name, k.strength, places);
   push(k.recent, `You ${did}.`, MAX_RECENT);
   if (step?.together) push(f.recent, `${k.name} helped you build the ${step.b.title}.`, MAX_RECENT);
   else if (f.place === k.place && d.action !== 'give' && d.action !== 'approach') push(f.recent, `${k.name} ${did} near you.`, MAX_RECENT);
@@ -411,10 +468,14 @@ function buildLines(world) {
   const open = openBuilds(world);
   const free = freePlots(world).length;
   const next = LANDS[landOf(world).length];
+  const stock = stockOf(world);
+  const affordable = Object.entries(BLUEPRINTS).filter(([id, bp]) => canAfford(stock, costOf(id)).ok
+    && !(bp.bridge && (world.builds ?? []).some((b) => b.kind === id)));
   return [
-    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${b.plot}`).join(', ') : 'nothing yet'}.`,
-    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${b.plot}`).join('; ') : 'nothing'}.`,
-    `You can build: ${Object.entries(BLUEPRINTS).map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps)`).join(', ')}. `
+    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
+    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
+    `Stockpile: ${amounts(stockOf(world))}.`,
+    `You can build (with what is in the Stockpile): ${affordable.length ? affordable.map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps, costs ${amounts(costOf(id))})`).join(', ') : 'nothing yet'}. `
       + `Building together at the same site goes twice as fast. At most ${MAX_OPEN} things are built at once; ${free} free plot${free === 1 ? '' : 's'} left.`,
     next ? `Every ${LAND_EVERY} finished builds, new land rises from the water; next: ${next.name}.` : 'All the new land has risen.',
   ];
@@ -433,7 +494,8 @@ export function buildPrompt(world, id, clock) {
     `Hunger: ${level(k.hunger, ['full', 'peckish', 'hungry', 'starving'])}. Energy: ${level(k.energy, ['exhausted', 'tired', 'awake', 'full of beans'])}.`,
     `You are a ${g.stageLabel.toLowerCase()}, strength ${Math.round(k.strength)} of 100${g.nextStage ? ` (a ${g.nextStage.label.toLowerCase()} at ${g.nextStage.at})` : ''}. `
       + `You can climb about ${Math.round(g.reach * 100)}% of the way up a tree and hold ${g.carry} things. ${f.name} is a ${fg.stageLabel.toLowerCase()}.`,
-    `You hold: ${k.inventory.length ? k.inventory.join(', ') : 'nothing'}.`,
+    `You hold: ${k.inventory.length ? k.inventory.join(', ') : 'nothing'}. You carry: ${amounts(k.res ?? {})} (paws hold ${carryLimit(k.strength)} things in all).`,
+    `Here you can gather: ${(SOURCES[k.place] ?? []).join(', ') || 'nothing'}.`,
     `${f.name} is at the ${place(f.place)}, ${f.activity === 'nap' ? 'napping' : `doing: ${f.activity}`}, looking ${f.mood}.`,
     `How you feel about ${f.name}: ${k.bond} (from -100 to 100). ${k.opinion ? `You think: "${k.opinion}"` : 'You have no firm opinion yet.'}`,
     '',
@@ -447,7 +509,8 @@ export function buildPrompt(world, id, clock) {
     ...buildLines(world),
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
     `approach (go to ${f.name}), give (target: an item you hold, to ${f.name}),`,
-    `build (target: one of ${Object.keys(BLUEPRINTS).join(', ')} to start or help with that, or empty to keep working on what is underway; give a new build a build_name), sit.`,
+    `gather (target: a resource found where you are; wood at the gum trees, water at the pond, stone at the lookout, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
+    'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name), sit.',
     'Choose what you do next.',
   ];
   return lines.join('\n');

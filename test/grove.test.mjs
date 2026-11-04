@@ -235,12 +235,12 @@ test('the visitor can set the time of day; the day count never goes back', async
 test('builds are shared by both koalas, sent to the page, and survive a restart', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grove-build-'));
   const file = path.join(dir, 'grove.sqlite');
-  const a = setup({ path: file, decide: () => ({ ok: true, raw: { action: 'build', target: 'hut', build_name: 'Leafy Home' }, usage: USAGE }) });
+  const a = setup({ path: file, decide: () => ({ ok: true, raw: { action: 'build', target: 'birdhouse', build_name: 'Leafy Home' }, usage: USAGE }) });
   a.grove.play();
   a.grove.heartbeat();
   await round(a.grove, a.advance, 5000);
   let s = a.grove.state();
-  assert.equal(s.builds.length, 1, 'both koalas worked on one hut');
+  assert.equal(s.builds.length, 1, 'both koalas worked on one birdhouse (a fresh stockpile pays for it)');
   assert.equal(s.builds[0].title, 'Leafy Home');
   assert.equal(s.builds[0].progress, 3, 'the second koala built together with the first');
   assert.match(s.places[s.builds[0].plot].name, /Leafy Home/);

@@ -6,7 +6,7 @@ import {
 } from '../hq/grove-world.js';
 import { ISLAND, POND_R } from '../public/js/gfx/terrain-math.js';
 
-const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])), builds: [] });
+const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])), builds: [], stock: { wood: 99, stone: 99, sand: 99, water: 99, book: 99 } });
 const build = (w, id, target, name = '') => applyDecision(w, id, parseDecision({ action: 'build', target, build_name: name }, w.koalas[id], placesOf(w)));
 
 test('building is an action, with things to build and a name for each', () => {
@@ -123,7 +123,7 @@ test('the prompt tells a koala what it can build, what is underway and what stan
   build(w, 'crystal', 'treehouse', 'Sky Nest');
   const p = buildPrompt(w, 'ruby', groveClock(0));
   assert.match(p, /Sky Nest \(treehouse\), 1 of 6 done/);
-  assert.match(p, /build \(target: one of bench, lantern/);
+  assert.match(p, /You can build \(with what is in the Stockpile\): bench \(Log Bench, 2 steps, costs 2 wood\), lantern/);
   assert.match(p, /plot_\d/);
   assert.match(p, /together/i);
 });
