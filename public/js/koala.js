@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { furMaterial } from './gfx/materials.js';
 import { koalaPart } from './koala-parts.js';
+import { glide } from './view.js';
 
 const TAU = Math.PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -43,6 +44,10 @@ export class Koala {
     this.path = [];
     this.anim = 'idle';
     this.heading = 0;
+    this.speed = 0; // walking speed, eased (glide in view.js)
+    this.climbSpeed = 0;
+    this.turnV = 0; // turning speed of the heading spring
+    this.stride = 0;
     this.face = null;
     this.moving = false;
     this.blink = 2 + Math.random() * 3;
@@ -354,22 +359,44 @@ export class Koala {
       p.y = Math.max(0, p.y - CLIMB * pace * dt);
       mode = 'climbing';
     } else if (far > 0.06) {
-      const step = Math.min(far, WALK * pace * dt);
+      // ease in, cruise, ease out over the whole route, so it only slows down where it stops
+      let left = far;
+      for (let i = 0, a = next; i < this.path.length; i++) {
+        const b = this.path[i + 1] ?? this.goal;
+        left += Math.hypot(b.x - a.x, b.z - a.z);
+        a = b;
+      }
+      const g = glide(this.speed, left, dt, { max: WALK * pace, accel: 3.2 * pace });
+      this.speed = g.speed;
+      const step = Math.min(far, g.step);
+      this.stride += (step / (WALK * pace)) * 9; // the legs keep pace with the ground, no sliding
       p.x += (dx / far) * step;
       p.z += (dz / far) * step;
-      this.heading += angleTo(this.heading, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
+      this.#turn(Math.atan2(dx, dz), 10, dt);
       this.moving = true;
       mode = 'walk';
       if (far <= step + 1e-6 && this.path.length) this.path.shift();
     } else if (Math.abs(this.goal.y - p.y) > 0.02) {
-      p.y += Math.sign(this.goal.y - p.y) * Math.min(Math.abs(this.goal.y - p.y), CLIMB * pace * dt);
+      const g = glide(this.climbSpeed, Math.abs(this.goal.y - p.y), dt, { max: CLIMB * pace, accel: 2.5 });
+      this.climbSpeed = g.speed;
+      p.y += Math.sign(this.goal.y - p.y) * g.step;
       mode = 'climbing';
     }
-    if (!this.moving && this.face != null) this.heading += angleTo(this.heading, this.face) * Math.min(1, dt * 4);
+    if (!this.moving) this.speed = 0;
+    if (mode !== 'climbing') this.climbSpeed = 0;
+    if (!this.moving && this.face != null) this.#turn(this.face, 5, dt);
+    else if (!this.moving) this.turnV *= Math.exp(-8 * dt);
     this.root.position.set(p.x, p.y + this.groundY(p.x, p.z), p.z);
     this.root.rotation.y = this.heading;
     this.#pose(mode, dt, t);
     this.#bubbles(dt);
+  }
+
+  // Turn toward an angle on a critically damped spring: quick, smooth, no wobble at the end.
+  #turn(to, omega, dt) {
+    const err = angleTo(this.heading, to);
+    this.turnV += (err * omega * omega - 2 * omega * this.turnV) * Math.min(dt, 0.05);
+    this.heading += this.turnV * Math.min(dt, 0.05);
   }
 
   #pose(mode, dt, t) {
@@ -382,7 +409,7 @@ export class Koala {
 
     switch (mode) {
       case 'walk': {
-        const w = Math.sin(s * 9);
+        const w = Math.sin(this.stride + this.seed);
         pitch = 1.05; y = -0.2; z = 0.15; headX = -0.95;
         aL = 0.3 + w * 0.7; aR = 0.3 - w * 0.7; lL = -0.2 - w * 0.6; lR = -0.2 + w * 0.6;
         y += Math.abs(w) * 0.05;

@@ -154,3 +154,16 @@ export function critterPath(kind, t, home, phase = 0) {
   const a = phase + t * 0.45;
   return { x: home.x + Math.cos(a) * 6, z: home.z + Math.sin(a) * 6, y: 10 + Math.sin(t * 0.7 + phase) * 1.5, yaw: -a };
 }
+
+// --- motion ----------------------------------------------------------------------------
+// One frame of easing toward a target `distance` away: speed builds up at `accel`, cruises at
+// `max`, and follows a braking curve so it arrives gently, never past the target.
+export function glide(speed, distance, dt, { max, accel }) {
+  if (!(distance > 0)) return { speed: 0, step: 0 };
+  const brake = Math.sqrt(2 * accel * distance); // the fastest speed that can still stop in time
+  const want = Math.min(max, brake);
+  let v = speed < want ? Math.min(want, speed + accel * dt) : Math.max(want, speed - accel * 2 * dt);
+  if (brake < max) v = Math.max(v, Math.min(0.15, want)); // braking: never crawl forever at the very end
+  const step = Math.min(distance, v * dt);
+  return { speed: step === distance ? 0 : v, step };
+}
