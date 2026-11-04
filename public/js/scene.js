@@ -13,13 +13,13 @@ import { BuildLayer } from './gfx/builds.js';
 import { gradeAt } from './gfx/grade.js';
 import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
-import { makeTerrain, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
+import { makeTerrain, bushlandSpots, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
 import { shared, groundMaterial, waterMaterial, RIPPLES } from './gfx/materials.js';
 import { Sky } from './gfx/sky.js';
 import { buildSplat, buildLawn, buildCliff, buildRoots, buildIslet } from './gfx/terrain.js';
 import { buildGrass, eucalypt, treeMeshes, leafMaterials, rockGeometry, rockMaterial, fernMesh, bushShape, flowerMeshes } from './gfx/flora.js';
-import { buildProps, animatePond } from './gfx/props.js';
+import { buildProps, buildMounds, animatePond } from './gfx/props.js';
 import { Effects, buildAmbient } from './gfx/particles.js';
 import { Post } from './gfx/post.js';
 import { rng } from './gfx/noise.js';
@@ -39,7 +39,8 @@ const smooth = (a, b, x) => {
 };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const BARK = ['#e9e0d1', '#d8c8b2', '#cfc6bd', '#e4d3c0', '#c9bba6'].map((c) => new THREE.Color(c));
+// smooth pale gums, and a few rough, dark stringybarks among them
+const BARK = ['#e9e0d1', '#d8c8b2', '#cfc6bd', '#e4d3c0', '#c9bba6', '#8f7259', '#7d644f'].map((c) => new THREE.Color(c));
 const LEAF = ['#8aa67c', '#7a9a70', '#98b085', '#8fa97a', '#86a58a', '#a1b58c', '#7d9c78'].map((c) => new THREE.Color(c));
 // The three named gums keep their own look.
 const HERO = {
@@ -277,6 +278,8 @@ export class GroveScene {
     }
 
     lap('forest-spots');
+    // paperbarks on the pond bank and termite mounds in the open (koala bushland)
+    this.bush = bushlandSpots(T, places, { avoid: forest, seed: 5 });
     // 2. props, rocks, bushes, ferns, flowers: their positions also bake occlusion into the ground
     const props = buildProps({ places, terrain: T, tex, rand });
     this.props = props;
@@ -365,6 +368,8 @@ export class GroveScene {
       ...rocks.map((o) => ({ x: o.x, z: o.z, r: o.k * 2.4 + 0.4, s: 0.5 })),
       ...props.rockSpots.map((o) => ({ x: o.x, z: o.z, r: o.r * 2.4 + 0.3, s: 0.45 })),
       ...bushes.map((b) => ({ x: b.x, z: b.z, r: b.k * 1.6 + 0.4, s: 0.5 })),
+      ...this.bush.paperbarks.map((t) => ({ x: t.x, z: t.z, r: 1.8, s: 0.6 })),
+      ...this.bush.mounds.map((m) => ({ x: m.x, z: m.z, r: 1.7 * m.k, s: 0.65 })),
     ];
     const splat = buildSplat({ terrain: T, size: S.texSize, blobs, caps: props.caps });
     lap('splat');
@@ -444,6 +449,13 @@ export class GroveScene {
       this.forest.push(g);
     });
 
+    // paperbarks: slender, pale papery bark, narrow grey-green leaves
+    const paper = eucalypt({ seed: 71, height: 5.4, trunkR: 0.3, lean: 0.9, branches: 7, clusters: 18, cards: 14 });
+    group.add(treeMeshes({
+      shape: paper, mats, barkMat,
+      instances: this.bush.paperbarks.map((t) => ({ x: t.x, y: T.height(t.x, t.z), z: t.z, yaw: t.yaw, scale: t.k, bark: new THREE.Color('#f6f1e6'), leaf: new THREE.Color('#90a593') })),
+    }));
+    group.add(buildMounds({ spots: this.bush.mounds, terrain: T, tex }));
     lap('trees+islets');
     // 6. ground cover
     group.add(fernMesh({ spots: ferns, tex, terrain: T }));
