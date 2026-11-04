@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, PLACES, newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, PLACES, newKoala, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 
@@ -29,6 +29,8 @@ export const GROVE_DEFAULTS = {
 };
 
 const LOG_ROWS = 80;
+// Times of day the visitor can jump to, in minutes after midnight.
+const TIMES = { morning: 7 * 60, noon: 12 * 60, evening: 18 * 60 + 30, night: 22 * 60 };
 
 export class GroveError extends Error {
   constructor(status, message) {
@@ -259,6 +261,28 @@ export class Grove {
     this.#setMeta('pausedReason', reason);
     for (const k of KOALAS) if (!this.#run[k.id].thinking) this.#run[k.id].nextAt = Infinity;
     if (reason) this.#log({ kind: 'system', text: `Paused: ${reason}` });
+    this.#emit();
+    return this.state();
+  }
+
+  // The visitor moves the grove's clock to a time of day. It only ever goes forward, so an
+  // earlier time means the next day; both koalas notice the change in the light.
+  setTime(to) {
+    const at = TIMES[to];
+    if (at == null) throw new GroveError(400, `time must be one of: ${Object.keys(TIMES).join(', ')}`);
+    const c = this.clock();
+    const now = (c.day - 1) * 1440 + c.hour * 60 + c.minute;
+    let want = (c.day - 1) * 1440 + at;
+    if (want <= now) want += 1440;
+    // groveClock starts its first day at 08:00 (480 minutes in).
+    this.#setMeta('epoch', this.now() - ((want - 480) / 1440) * DAY_MS);
+    for (const k of KOALAS) {
+      const koala = this.world.koalas[k.id];
+      koala.recent.push(`The light changed all at once: it is ${to} now.`);
+      if (koala.recent.length > 10) koala.recent.splice(0, koala.recent.length - 10);
+      this.#save(k.id);
+    }
+    this.#log({ kind: 'system', text: `You turned the grove's clock to ${to}: ${this.clock().label}` });
     this.#emit();
     return this.state();
   }

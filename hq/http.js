@@ -92,7 +92,17 @@ export function createApp({ grove, publicDir }) {
     });
   }
 
-  // State, Play/Pause, the page's heartbeat, and the visitor's actions.
+  // A grove refusal (bad item, full paws, unknown time) keeps its status.
+  function refuse(fn) {
+    try {
+      return fn();
+    } catch (err) {
+      if (err.status) throw new HttpError(err.status, err.message);
+      throw err;
+    }
+  }
+
+  // State, Play/Pause, the clock, the page's heartbeat, and the visitor's actions.
   async function api(req, res, pathname) {
     const method = req.method;
     if (method !== 'GET' && method !== 'HEAD') {
@@ -107,12 +117,11 @@ export function createApp({ grove, publicDir }) {
       if (pathname === '/api/grove/heartbeat') return sendJson(res, 200, grove.heartbeat());
       if (pathname === '/api/grove/act') {
         const body = await readJson(req);
-        try {
-          return sendJson(res, 200, grove.act(body));
-        } catch (err) {
-          if (err.status) throw new HttpError(err.status, err.message);
-          throw err;
-        }
+        return sendJson(res, 200, refuse(() => grove.act(body)));
+      }
+      if (pathname === '/api/grove/time') {
+        const { to } = await readJson(req);
+        return sendJson(res, 200, refuse(() => grove.setTime(to)));
       }
     }
     throw new HttpError(404, 'not found');

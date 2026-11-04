@@ -207,3 +207,27 @@ test('memories, usage and Play survive a restart', async () => {
   assert.equal(s.usage.total.calls, 2);
   b.grove.close();
 });
+
+test('the visitor can set the time of day; the day count never goes back', async () => {
+  const { grove, calls, advance } = setup();
+  assert.equal(grove.state().clock.label, 'Day 1 · 08:00');
+  grove.setTime('night');
+  assert.equal(grove.state().clock.label, 'Day 1 · 22:00');
+  assert.equal(grove.state().clock.phase, 'night');
+  grove.setTime('morning'); // earlier than now: that is tomorrow morning
+  assert.equal(grove.state().clock.label, 'Day 2 · 07:00');
+  grove.setTime('noon');
+  assert.equal(grove.state().clock.label, 'Day 2 · 12:00');
+  grove.setTime('evening');
+  assert.equal(grove.state().clock.label, 'Day 2 · 18:30');
+  assert.ok(grove.state().log.some((e) => e.kind === 'system' && /evening/.test(e.text)));
+  const status = (fn) => { try { fn(); return 200; } catch (err) { return err.status; } };
+  assert.equal(status(() => grove.setTime('teatime')), 400);
+  // The koalas notice, and the next prompt carries the new time.
+  grove.play();
+  grove.heartbeat();
+  await round(grove, advance, 5000);
+  const p = calls.find((c) => c.koala === 'mallee').prompt;
+  assert.match(p, /Day 2 · 18:3/);
+  assert.match(p, /evening/i);
+});

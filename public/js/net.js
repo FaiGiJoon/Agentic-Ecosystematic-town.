@@ -22,6 +22,7 @@ export const groveApi = {
   pause: () => post('/api/grove/pause'),
   heartbeat: () => post('/api/grove/heartbeat'),
   act: (body) => post('/api/grove/act', body),
+  time: (to) => post('/api/grove/time', { to }),
 };
 
 // EventSource reconnects by itself; every (re)connect reloads the full grove state.

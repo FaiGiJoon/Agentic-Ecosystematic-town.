@@ -58,6 +58,7 @@ export function createUI({ scene, api }) {
     if (k === 'escape') {
       select(null);
       pop.hidden = true;
+      timePop.hidden = true;
     }
     if (k === 'e') {
       const me = scene.visitor.root.position;
@@ -68,6 +69,33 @@ export function createUI({ scene, api }) {
       }
       if (best) select(best.id);
       else toast('Walk closer to a koala first.');
+    }
+  });
+
+  // --- time of day ---------------------------------------------------------------------
+  const timePop = $('#time-pop');
+  const timeBtn = $('#time-btn');
+  const timeOf = (c) => (c.phase === 'night' ? 'night' : c.phase === 'dusk' ? 'evening' : c.hour < 11 ? 'morning' : 'noon');
+  timeBtn.addEventListener('click', () => {
+    timePop.hidden = !timePop.hidden;
+    timeBtn.setAttribute('aria-expanded', String(!timePop.hidden));
+  });
+  for (const b of timePop.querySelectorAll('[data-time]')) {
+    b.addEventListener('click', async () => {
+      timePop.hidden = true;
+      timeBtn.setAttribute('aria-expanded', 'false');
+      try {
+        const s = await api.time(b.dataset.time);
+        toast(`It is ${b.dataset.time} in the grove: ${s.clock.label}`);
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+  }
+  addEventListener('pointerdown', (e) => {
+    if (!timePop.hidden && !e.target.closest('#time-pop, #time-btn')) {
+      timePop.hidden = true;
+      timeBtn.setAttribute('aria-expanded', 'false');
     }
   });
 
@@ -342,6 +370,7 @@ export function createUI({ scene, api }) {
     const night = state.clock.phase === 'night';
     $('#clock-ico use').setAttribute('href', night ? '#i-moon' : '#i-sun');
     $('#clock-ico').parentElement.classList.toggle('night', night);
+    for (const b of timePop.querySelectorAll('[data-time]')) b.setAttribute('aria-pressed', String(b.dataset.time === timeOf(state.clock)));
   }
 
   function draw() {

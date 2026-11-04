@@ -118,3 +118,11 @@ test('bodies over 16 KB are 413', async () => {
   const res = await post('/api/grove/act', { koala: 'mallee', kind: 'say', text: 'a'.repeat(20 * 1024) });
   assert.equal(res.status, 413);
 });
+
+test('POST /api/grove/time moves the clock; a bad time is 400', async () => {
+  const res = await post('/api/grove/time', { to: 'noon' });
+  assert.equal(res.status, 200);
+  assert.match((await res.json()).clock.label, /12:00/);
+  assert.equal((await post('/api/grove/time', { to: 'teatime' })).status, 400);
+  assert.equal((await post('/api/grove/time', { to: 'noon' }, { 'content-type': 'text/plain' })).status, 415);
+});

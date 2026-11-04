@@ -47,6 +47,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .brand .logo { width: 30px; height: 30px; color: var(--mint); background: rgba(159, 211, 176, 0.14); border-radius: 10px; padding: 4px; }
 .brand .title { font: 700 var(--fs-m)/1.15 var(--sans); letter-spacing: 0.01em; }
 .brand .sub { display: flex; align-items: center; gap: 5px; font: var(--fs-xs) var(--mono); color: var(--muted); }
+button.sub { padding: 2px 6px; margin: 0 -6px; border: 1px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
+button.sub:hover, button.sub[aria-expanded='true'] { border-color: rgba(159, 211, 176, 0.45); color: var(--text); }
 .brand .sub .ico { color: var(--warm); }
 .brand .sub.night .ico { color: var(--lilac); }
 .back, .iconbtn, .playbtn {
@@ -75,12 +77,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 
 /* settings popover and frame-rate readout */
-#settings-pop {
+#settings-pop, #time-pop {
   position: absolute; top: 48px; right: 0; width: 290px; padding: var(--s-4); border-radius: var(--r-m);
   background: rgba(15, 21, 32, 0.94); border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: var(--shadow);
 }
-#settings-pop[hidden] { display: none; }
-#settings-pop h2 { margin: 0 0 var(--s-3); font: 700 var(--fs-m) var(--sans); }
+#settings-pop[hidden], #time-pop[hidden] { display: none; }
+#time-pop { left: 0; right: auto; top: 58px; }
+#settings-pop h2, #time-pop h2 { margin: 0 0 var(--s-3); font: 700 var(--fs-m) var(--sans); }
 .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 3px; border-radius: var(--r-s); background: var(--glass-2); }
 .seg button { min-height: 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 500 var(--fs-s) var(--sans); cursor: pointer; }
 .seg button[aria-pressed='true'] { background: var(--mint); color: var(--mint-ink); font-weight: 700; }
@@ -233,6 +236,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
   #panel-toggle { display: none; }
   #feed { display: none; }
   #inspector { left: 8px; right: 8px; width: auto; bottom: calc(46vh + 16px + env(safe-area-inset-bottom, 0px)); }
+  #time-pop { position: fixed; top: calc(64px + env(safe-area-inset-top, 0px)); left: 10px; right: 10px; width: auto; }
   #settings-pop { position: fixed; top: calc(64px + env(safe-area-inset-top, 0px)); right: 10px; left: 10px; width: auto; }
   .intro-card { padding: 24px 22px; }
   .intro-card h1 { font-size: 36px; }

@@ -49,7 +49,7 @@
       <svg class="logo" aria-hidden="true"><use href="#i-koala"/></svg>
       <div>
         <div class="title">Koala Grove</div>
-        <div class="sub"><svg class="ico" id="clock-ico" aria-hidden="true"><use href="#i-sun"/></svg><span id="clock">Day 1 · 08:00</span></div>
+        <button class="sub" id="time-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="time-pop" title="Change the time of day"><svg class="ico" id="clock-ico" aria-hidden="true"><use href="#i-sun"/></svg><span id="clock">Day 1 · 08:00</span></button>
       </div>
     </div>
     <div class="chips" id="chips"></div>
@@ -67,6 +67,16 @@
       <p id="q-now" class="q-note"></p>
       <label class="check"><input type="checkbox" id="fps-toggle"> Show frame rate</label>
       <p class="q-note">Auto lowers the resolution and then the effects if the game runs slowly, and brings them back when it can. Texture sharpness is set when the page loads.</p>
+    </div>
+    <div id="time-pop" role="dialog" aria-label="Time of day" hidden>
+      <h2>Time of day</h2>
+      <div class="seg" role="group" aria-label="Time of day">
+        <button type="button" data-time="morning">Morning</button>
+        <button type="button" data-time="noon">Noon</button>
+        <button type="button" data-time="evening">Evening</button>
+        <button type="button" data-time="night">Night</button>
+      </div>
+      <p class="q-note">Moves the grove's clock for both koalas, and they notice. The clock only goes forward, so an earlier time means tomorrow.</p>
     </div>
     <div id="fps" hidden></div>
   </header>
