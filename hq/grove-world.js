@@ -136,6 +136,20 @@ export const DECISION_SCHEMA = {
 };
 
 const byId = (id) => KOALAS.find((k) => k.id === id);
+export const MAX_KOALAS = 4;
+
+// Everyone else in the grove.
+export function others(world, id) {
+  return Object.values(world.koalas).filter((o) => o.id !== id);
+}
+
+// The koala this one does things with (approach, give): the other founder, or a young koala's parent.
+export function friendOf(world, id) {
+  const founder = byId(id);
+  if (founder) return world.koalas[KOALAS.find((x) => x.id !== id).id];
+  const k = world.koalas[id];
+  return world.koalas[k.parents?.find((p) => world.koalas[p])] ?? others(world, id)[0];
+}
 const other = (id) => KOALAS.find((k) => k.id !== id);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -293,7 +307,7 @@ function describe(d, friendName, strength, places) {
 // One step of building. Picks the project (the same kind if one is open, else a new one on the
 // nearest free plot, else the koala's own or the oldest open one), adds the work, and finishes it
 // when it is done. Returns null when there is nothing to work on and no room for something new.
-function buildStep(world, k, f, d) {
+function buildStep(world, k, rest, d) {
   world.builds ??= [];
   const open = openBuilds(world);
   let b = BLUEPRINTS[d.target]
@@ -319,7 +333,7 @@ function buildStep(world, k, f, d) {
   if (!b && open.length) b = open[0];
   if (!b) return null;
   const site = siteOf(b);
-  const together = f.place === site && f.activity === 'build';
+  const together = rest.some((o) => o.place === site && o.activity === 'build');
   b.progress = Math.min(b.effort, b.progress + (together ? 2 : 1));
   if (!b.helpers.includes(k.id)) b.helpers.push(k.id);
   k.place = site;
@@ -339,11 +353,13 @@ function describeBuild({ b, started, together }) {
 // Carries out a parsed decision; returns the log entries it produced.
 export function applyDecision(world, id, d) {
   const k = world.koalas[id];
-  const f = world.koalas[other(id).id];
+  const f = friendOf(world, id);
+  const rest = others(world, id);
+  const tell = (text, who = rest) => { for (const o of who) push(o.recent, text, MAX_RECENT); };
   let step = null;
   let stored = null;
   if (d.action === 'build') {
-    step = buildStep(world, k, f, d);
+    step = buildStep(world, k, rest, d);
     if (step?.missing) {
       push(k.recent, `You wanted to build a ${step.title}, but it needs ${amounts(step.missing).replace(/(\d+) /g, '$1 more ')}. Gather some and store it in the Stockpile.`, MAX_RECENT);
       step = null;
@@ -409,31 +425,32 @@ export function applyDecision(world, id, d) {
     : stored ? (Object.keys(stored).length ? `stored ${amounts(stored)} in the Stockpile` : 'went to the Stockpile with empty paws')
     : describe(d, f.name, k.strength, places);
   push(k.recent, `You ${did}.`, MAX_RECENT);
-  if (step?.together) push(f.recent, `${k.name} helped you build the ${step.b.title}.`, MAX_RECENT);
-  else if (f.place === k.place && d.action !== 'give' && d.action !== 'approach') push(f.recent, `${k.name} ${did} near you.`, MAX_RECENT);
+  if (step?.together) tell(`${k.name} helped you build the ${step.b.title}.`, rest.filter((o) => o.place === k.place));
+  else if (d.action !== 'give' && d.action !== 'approach') tell(`${k.name} ${did} near you.`, rest.filter((o) => o.place === k.place));
   if (d.action === 'approach') push(f.recent, `${k.name} came over to you.`, MAX_RECENT);
   const log = [{ koala: id, kind: 'act', text: `${k.name} ${did}`, action: d.action, target: d.target }];
   if (d.say) {
     push(k.recent, `You said: "${d.say}"`, MAX_RECENT);
-    push(f.recent, `${k.name} said: "${d.say}"`, MAX_RECENT);
+    tell(`${k.name} said: "${d.say}"`);
     log.push({ koala: id, kind: 'say', text: d.say });
   }
   if (step?.b.done) {
     const t = step.b.title;
-    push(k.recent, `You finished the ${t}! It stands at ${step.b.plot} now.`, MAX_RECENT);
-    push(f.recent, `${k.name} finished the ${t}! It stands at ${step.b.plot} now.`, MAX_RECENT);
-    const who = step.b.helpers.length > 1 ? `${k.name} and ${f.name}` : k.name;
+    push(k.recent, `You finished the ${t}! It stands at ${siteOf(step.b)} now.`, MAX_RECENT);
+    tell(`${k.name} finished the ${t}! It stands at ${siteOf(step.b)} now.`);
+    const names = step.b.helpers.map((h) => world.koalas[h]?.name ?? h);
+    const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : k.name;
     log.push({ koala: id, kind: 'built', text: `${who} finished the ${t}!`, target: step.b.plot });
   }
   for (const l of step?.newLand ?? []) {
-    for (const x of [k, f]) push(x.recent, `The grove grew! New land rose from the water: ${l.name} (${l.id}).`, MAX_RECENT);
+    for (const x of [k, ...rest]) push(x.recent, `The grove grew! New land rose from the water: ${l.name} (${l.id}).`, MAX_RECENT);
     log.push({ kind: 'land', text: `The grove grew: ${l.name} rose from the water!`, target: l.id });
   }
   const stageNow = stageOf(k.strength);
   if (stageNow.id !== stageBefore.id) {
     const word = stageNow.label.toLowerCase();
     push(k.recent, `You feel stronger. You are a ${word} now!`, MAX_RECENT);
-    push(f.recent, `${k.name} has grown into a ${word}.`, MAX_RECENT);
+    tell(`${k.name} has grown into a ${word}.`);
     log.push({ koala: id, kind: 'grow', text: `${k.name} grew into a ${word}!` });
   }
   return log;
@@ -460,11 +477,12 @@ export function groveClock(ms) {
 
 const level = (v, words) => words[Math.min(words.length - 1, Math.floor(v / (100 / words.length)))];
 
-export function systemPrompt(id) {
-  const k = byId(id);
-  const f = other(id);
+export function systemPrompt(id, world = null) {
+  const k = byId(id) ?? world?.koalas[id];
+  const f = byId(id) ? other(id) : friendOf(world, id);
+  const family = world ? others(world, id).filter((o) => o.id !== f.id).map((o) => o.name) : [];
   return [
-    `You are ${k.name}, a koala living in a small eucalyptus grove with one other koala, ${f.name}, a ${f.gender} (${PRONOUNS[f.gender]}).`,
+    `You are ${k.name}, a koala living in a small eucalyptus grove with ${f.name}, a ${f.gender} (${PRONOUNS[f.gender] ?? 'they/them'})${family.length ? `, and your family: ${family.join(', ')}` : ''}.`,
     k.persona,
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
@@ -496,7 +514,7 @@ function buildLines(world) {
 
 export function buildPrompt(world, id, clock) {
   const k = world.koalas[id];
-  const f = world.koalas[other(id).id];
+  const f = friendOf(world, id);
   const places = placesOf(world);
   const place = (p) => `${places[p]?.name ?? p} (${p})`;
   const g = growthOf(k);
@@ -511,6 +529,7 @@ export function buildPrompt(world, id, clock) {
     `Here you can gather: ${(SOURCES[k.place] ?? []).join(', ') || 'nothing'}.`,
     `${f.name} is at the ${place(f.place)}, ${f.activity === 'nap' ? 'napping' : `doing: ${f.activity}`}, looking ${f.mood}.`,
     `How you feel about ${f.name}: ${k.bond} (from -100 to 100). ${k.opinion ? `You think: "${k.opinion}"` : 'You have no firm opinion yet.'}`,
+    ...others(world, id).filter((o) => o.id !== f.id).map((o) => `${o.name} is a ${growthOf(o).stageLabel.toLowerCase()}${o.follows ? ` who follows ${world.koalas[o.follows]?.name ?? 'a parent'} everywhere` : ''}, at the ${place(o.place)}.`),
     '',
     'Things you remember:',
     ...(k.memories.length ? k.memories.slice(-PROMPT_MEMORIES).map((m) => `- ${m}`) : ['- nothing yet']),

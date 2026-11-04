@@ -520,7 +520,29 @@ export class GroveScene {
   }
 
   #buildKoalas(list) {
-    for (const k of list) {
+    for (const k of list) this.#koalaView(k);
+    // soft contact shadows under everyone: cheap occlusion that sells the footing
+    this.blobs = [...this.koalas.values(), this.visitor].map((who) => this.#blob(who));
+    // the ring under a selected or hovered koala
+    const ringGeo = new THREE.RingGeometry(0.78, 0.95, 56);
+    ringGeo.rotateX(-Math.PI / 2);
+    this.ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#9fd3b0', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    this.ring.visible = false;
+    this.ring.renderOrder = 3;
+    this.scene.add(this.ring);
+  }
+
+  #blob(who) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex.blob, transparent: true, depthWrite: false, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 1;
+    this.scene.add(m);
+    return { mesh: m, who };
+  }
+
+  // One koala's view: model, tag, carried blocks. Also used when a baby is born mid-session.
+  #koalaView(k) {
+    {
       const view = new Koala(k, { tex: this.tex, groundY: this.groundY });
       const s = spotFor(this.places, k.place, k.id, k.activity, k.reach);
       view.grow(k.size ?? 1);
@@ -532,22 +554,8 @@ export class GroveScene {
       view.rig.add(view.carry);
       this.koalas.set(k.id, view);
       this.scene.add(view.root);
+      return view;
     }
-    // soft contact shadows under everyone: cheap occlusion that sells the footing
-    this.blobs = [...this.koalas.values(), this.visitor].map((who) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex.blob, transparent: true, depthWrite: false, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
-      m.rotation.x = -Math.PI / 2;
-      m.renderOrder = 1;
-      this.scene.add(m);
-      return { mesh: m, who };
-    });
-    // the ring under a selected or hovered koala
-    const ringGeo = new THREE.RingGeometry(0.78, 0.95, 56);
-    ringGeo.rotateX(-Math.PI / 2);
-    this.ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#9fd3b0', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    this.ring.visible = false;
-    this.ring.renderOrder = 3;
-    this.scene.add(this.ring);
   }
 
   #effects(S) {
@@ -672,8 +680,12 @@ export class GroveScene {
     this.clockDay = state.clock.day;
     this.clockAt = performance.now();
     for (const k of state.koalas) {
-      const view = this.koalas.get(k.id);
-      if (!view) continue;
+      let view = this.koalas.get(k.id);
+      if (!view) {
+        view = this.#koalaView(k); // a baby born while the page is open
+        this.blobs.push(this.#blob(view));
+        this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 1, view.pos.z, 6);
+      }
       const before = prev?.koalas.find((q) => q.id === k.id);
       if (before && k.bond > before.bond) this.fx.hearts(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 2.1 * view.size, view.pos.z, Math.min(5, 2 + (k.bond - before.bond)));
       view.grow(k.size ?? 1);

@@ -264,3 +264,17 @@ test('prompts stay short: recent memories and events are trimmed', () => {
   assert.match(p, /- memory 4\n/);
   assert.ok(p.length < 3200, `prompt is ${p.length} characters`);
 });
+
+test('a third koala hears what is said and shows up in the others\' prompts', async () => {
+  const { MAX_KOALAS, others } = await import('../hq/grove-world.js');
+  assert.equal(MAX_KOALAS, 4);
+  const w = world();
+  w.koalas.pip = { ...newKoala('crystal'), id: 'pip', name: 'Pip', follows: 'crystal', parents: ['crystal', 'ruby'] };
+  assert.deepEqual(others(w, 'ruby').map((k) => k.id).sort(), ['crystal', 'pip']);
+  applyDecision(w, 'ruby', parseDecision({ action: 'sit', say: 'Good morning!' }, w.koalas.ruby));
+  assert.match(w.koalas.crystal.recent.at(-1), /Ruby said: "Good morning!"/);
+  assert.match(w.koalas.pip.recent.at(-1), /Ruby said: "Good morning!"/);
+  const p = buildPrompt(w, 'ruby', groveClock(0));
+  assert.match(p, /Crystal is at/);
+  assert.match(p, /Pip/);
+});

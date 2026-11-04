@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
+  KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, growthOf, carryLimit,
 } from './grove-world.js';
 import { koalaArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
@@ -80,6 +80,7 @@ export class Grove {
     const p = (sql) => db.prepare(sql);
     this.q = {
       koala: p('SELECT data FROM grove_koalas WHERE id = ?'),
+      allKoalas: p('SELECT id, data FROM grove_koalas ORDER BY rowid'),
       saveKoala: p('INSERT INTO grove_koalas (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data'),
       log: p('INSERT INTO grove_log (ts, koala, kind, text, action, target) VALUES (?, ?, ?, ?, ?, ?)'),
       recentLog: p('SELECT * FROM grove_log ORDER BY id DESC LIMIT ?'),
@@ -97,8 +98,10 @@ export class Grove {
     for (const k of KOALAS) {
       const row = this.q.koala.get(k.id);
       this.world.koalas[k.id] = row ? { ...newKoala(k.id), ...JSON.parse(row.data) } : newKoala(k.id);
-      this.#run[k.id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
     }
+    // the family born in the grove
+    for (const row of this.q.allKoalas.all()) if (!this.world.koalas[row.id]) this.world.koalas[row.id] = JSON.parse(row.data);
+    for (const id of Object.keys(this.world.koalas)) this.#run[id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
     this.world.builds = this.#meta('builds', []);
     this.world.stock = this.#meta('stock', { ...START_STOCK });
     if (this.#meta('epoch') == null) this.#setMeta('epoch', this.now());
@@ -131,6 +134,23 @@ export class Grove {
     }
     const fix = db.prepare('UPDATE grove_log SET text = ? WHERE id = ?');
     for (const r of db.prepare("SELECT id, text FROM grove_log WHERE text LIKE '%Mallee%' OR text LIKE '%Bramble%'").all()) fix.run(migrateNames(r.text), r.id);
+  }
+
+  // Every koala, founders first; and the ones that make their own decisions (not following a parent).
+  #all() {
+    return Object.values(this.world.koalas);
+  }
+  #thinkers() {
+    return this.#all().filter((k) => !k.follows);
+  }
+
+  // A new koala joins the grove (a baby, born in grove.js's birth step).
+  addKoala(k) {
+    this.world.koalas[k.id] = { ...newKoala(KOALAS[0].id), ...k };
+    this.#run[k.id] = { nextAt: Infinity, thinking: false, lastStart: 0, replyDue: false };
+    this.#save(k.id);
+    this.#emit();
+    return this.world.koalas[k.id];
   }
 
   // --- persistence helpers -----------------------------------------------------------
@@ -169,7 +189,7 @@ export class Grove {
   // --- spend ---------------------------------------------------------------------------
   #sums(since) {
     const out = { total: { calls: 0, cost: 0, tokens_in: 0, tokens_out: 0 } };
-    for (const k of KOALAS) out[k.id] = { calls: 0, cost: 0, tokens_in: 0, tokens_out: 0 };
+    for (const k of this.#all()) out[k.id] = { calls: 0, cost: 0, tokens_in: 0, tokens_out: 0 };
     for (const r of this.q.sums.all(since)) {
       const row = { calls: r.calls, cost: r.cost, tokens_in: r.tokens_in, tokens_out: r.tokens_out };
       out[r.koala] = row;
@@ -189,7 +209,7 @@ export class Grove {
     return lo + (hi - lo) * this.rng();
   }
   #schedule() {
-    KOALAS.forEach((k, i) => {
+    this.#thinkers().forEach((k, i) => {
       if (!this.#run[k.id].thinking) this.#run[k.id].nextAt = this.now() + 1000 + i * 2500;
     });
   }
@@ -211,7 +231,7 @@ export class Grove {
     const active = this.playing && present;
     if (active && this.#lastDrift) {
       const minutes = Math.min(2, (now - this.#lastDrift) / 60000);
-      for (const k of KOALAS) {
+      for (const k of this.#all()) {
         drift(this.world.koalas[k.id], minutes);
         this.#save(k.id);
       }
@@ -223,7 +243,7 @@ export class Grove {
       this.#emit();
     }
     if (!active || this.capped) return;
-    for (const k of KOALAS) {
+    for (const k of this.#thinkers()) {
       const r = this.#run[k.id];
       if (!r.thinking && now >= r.nextAt) this.#decide(k.id);
     }
@@ -236,7 +256,7 @@ export class Grove {
     if (this.#lastHour === null) this.#lastHour = hour;
     if (hour === this.#lastHour) return;
     this.#lastHour = hour;
-    for (const k of KOALAS) {
+    for (const k of this.#all()) {
       if (this.rng() >= 0.15) continue;
       const koala = this.world.koalas[k.id];
       koala.recent.push(SIGHTINGS[Math.floor(this.rng() * SIGHTINGS.length)]);
@@ -254,7 +274,7 @@ export class Grove {
     r.lastStart = this.now();
     const req = {
       koala: id,
-      system: systemPrompt(id),
+      system: systemPrompt(id, this.world),
       prompt: buildPrompt(this.world, id, this.clock()),
     };
     let call;
@@ -289,11 +309,20 @@ export class Grove {
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
-    for (const other of KOALAS) this.#save(other.id);
+    // babies go wherever the parent they follow goes
+    for (const baby of this.#all().filter((x) => x.follows === id)) {
+      baby.place = this.world.koalas[id].place;
+      baby.activity = this.world.koalas[id].activity === 'nap' ? 'nap' : 'sit';
+    }
+    for (const other of this.#all()) this.#save(other.id);
     this.#setMeta('builds', this.world.builds);
     this.#setMeta('stock', this.world.stock);
-    const friend = KOALAS.find((x) => x.id !== id).id;
-    if (decision.say || decision.action === 'give' || decision.action === 'approach') this.#nudge(friend);
+    const friend = friendOf(this.world, id).id;
+    if (decision.say) {
+      for (const o of this.#thinkers()) if (o.id !== id) this.#nudge(o.id);
+    } else if (decision.action === 'give' || decision.action === 'approach') {
+      this.#nudge(friend);
+    }
     const quiet = r.calm && !decision.say && !r.replyDue;
     let next = this.now() + (quiet ? this.#between(this.config.idleMinMs, this.config.idleMaxMs) : this.#between(this.config.minMs, this.config.maxMs));
     if (r.replyDue) next = Math.min(next, Math.max(this.now() + this.#between(this.config.replyMinMs, this.config.replyMaxMs), r.lastStart + this.config.gapMs));
@@ -320,7 +349,7 @@ export class Grove {
   pause(reason = null) {
     this.#setMeta('playing', false);
     this.#setMeta('pausedReason', reason);
-    for (const k of KOALAS) if (!this.#run[k.id].thinking) this.#run[k.id].nextAt = Infinity;
+    for (const k of this.#all()) if (!this.#run[k.id].thinking) this.#run[k.id].nextAt = Infinity;
     if (reason) this.#log({ kind: 'system', text: `Paused: ${reason}` });
     this.#emit();
     return this.state();
@@ -337,7 +366,7 @@ export class Grove {
     if (want <= now) want += 1440;
     // groveClock starts its first day at 08:00 (480 minutes in).
     this.#setMeta('epoch', this.now() - ((want - 480) / 1440) * DAY_MS);
-    for (const k of KOALAS) {
+    for (const k of this.#all()) {
       const koala = this.world.koalas[k.id];
       koala.recent.push(`The light changed all at once: it is ${to} now.`);
       if (koala.recent.length > 10) koala.recent.splice(0, koala.recent.length - 10);
@@ -433,10 +462,10 @@ export class Grove {
       resources: RESOURCES,
       costs: COSTS,
       islands: ISLANDS.map((i) => ({ ...i, bridged: bridged(this.world).has(i.id) })),
-      koalas: KOALAS.map((k) => ({
-        ...this.world.koalas[k.id],
-        ...growthOf(this.world.koalas[k.id]),
-        color: k.color,
+      koalas: this.#all().map((k) => ({
+        ...k,
+        ...growthOf(k),
+        color: KOALAS.find((f) => f.id === k.id)?.color ?? k.color ?? '#a8a29a',
         thinking: this.#run[k.id].thinking,
         nextAt: this.#run[k.id].nextAt === Infinity ? null : this.#run[k.id].nextAt,
       })),
@@ -447,7 +476,7 @@ export class Grove {
         callUsd: this.config.callUsd,
         today: today.total,
         total: total.total,
-        byKoala: Object.fromEntries(KOALAS.map((k) => [k.id, { today: today[k.id], total: total[k.id] }])),
+        byKoala: Object.fromEntries(this.#all().map((k) => [k.id, { today: today[k.id], total: total[k.id] }])),
         last: last ? { koala: last.koala, ok: !!last.ok, cost: last.cost_usd, tokens_in: last.tokens_in, tokens_out: last.tokens_out, ms: last.duration_ms, ts: last.ts } : null,
       },
       now,

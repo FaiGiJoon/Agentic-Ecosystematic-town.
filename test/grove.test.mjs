@@ -301,3 +301,26 @@ test('now and then a koala notices a critter', async () => {
   assert.ok(seen(() => 0.01).length > 0);
   assert.equal(seen(() => 0.99).length, 0);
 });
+
+test('a baby following its mother makes no model calls and goes where she goes', async () => {
+  const { grove, calls, advance } = setup({ decide: (k) => ({ ok: true, raw: k === 'crystal' ? { action: 'move', target: 'pond' } : { action: 'sit' }, usage: USAGE }) });
+  const base = grove.state().koalas[0];
+  grove.addKoala({ ...base, id: 'pip', name: 'Pip', follows: 'crystal', parents: ['crystal', 'ruby'], memories: [], recent: [] });
+  grove.play();
+  for (let i = 0; i < 2; i++) await openRound(grove, advance, 70000);
+  assert.ok(calls.length >= 2);
+  assert.ok(!calls.some((c) => c.koala === 'pip'), 'Pip never thinks');
+  const s = grove.state();
+  assert.equal(s.koalas.length, 3);
+  assert.equal(s.koalas.find((k) => k.id === 'pip').place, 'pond');
+  assert.ok(s.usage.byKoala.pip, 'Pip has a meter line');
+});
+
+test('coming over to a friend (without a word) nudges that friend to react soon', async () => {
+  const { grove, advance, now } = setup({ rng: () => 0, decide: (k) => ({ ok: true, raw: k === 'crystal' ? { action: 'approach' } : { action: 'sit' }, usage: USAGE }) });
+  grove.play();
+  grove.heartbeat();
+  await round(grove, advance, 5000);
+  const ruby = grove.state().koalas.find((k) => k.id === 'ruby');
+  assert.ok(ruby.nextAt - now() <= 12000, `Ruby waits ${ruby.nextAt - now()} ms`);
+});
