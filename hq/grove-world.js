@@ -33,6 +33,7 @@ import {
   RESOURCES, ISLANDS, OPEN_ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
 } from './grove-economy.js';
 import { canNest, nestStep } from './grove-family.js';
+import { designSpec, designCost } from './grove-design.js';
 
 // The koalas used to be called Mallee and Bramble; old groves are renamed on start.
 export const RENAMED = { mallee: 'crystal', bramble: 'ruby' };
@@ -134,8 +135,9 @@ export const DECISION_SCHEMA = {
     opinion: { type: 'string', description: 'One line: what you think of your friend now, or empty to keep it.' },
     build_name: { type: 'string', description: 'When you start building something, a name for it; otherwise empty.' },
     wish: { type: 'string', description: 'Something you would love to do or make one day, or empty to keep your wish.' },
+    build_design: { type: 'string', description: 'When you start building something new that you invented (target new), one sentence on what it is and what it looks like; otherwise empty.' },
   },
-  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish'],
+  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'build_design'],
   additionalProperties: false,
 };
 
@@ -285,7 +287,10 @@ export function parseDecision(raw, koala, places = PLACES) {
       target = '';
     }
   } else if (action === 'build') {
-    if (!BLUEPRINTS[target]) target = ''; // keep working on what is underway
+    if (!BLUEPRINTS[target]) {
+      // anything else that comes with a name or a design is an invention; otherwise keep working
+      target = target && (text(obj.build_name, 40) || text(obj.build_design, 160)) ? 'new' : '';
+    }
   } else if (action === 'research') {
     target = text(obj.target, 120); // the question, as asked
     if (!target) action = 'sit';
@@ -311,6 +316,7 @@ export function parseDecision(raw, koala, places = PLACES) {
     bond,
     opinion: text(obj.opinion, 120),
     buildName: text(obj.build_name, 40),
+    buildDesign: text(obj.build_design, 160),
     wish: text(obj.wish, 120),
     note,
   };
@@ -341,22 +347,31 @@ function describe(d, friendName, strength, places) {
 function buildStep(world, k, rest, d) {
   world.builds ??= [];
   const open = openBuilds(world);
-  let b = BLUEPRINTS[d.target]
-    ? open.find((x) => x.kind === d.target)
-    : open.find((x) => x.plot === k.place) ?? open.find((x) => x.by === k.id) ?? open[0];
+  const inventing = d.target === 'new' && (d.buildName || d.buildDesign);
+  const title = d.buildName || d.buildDesign.slice(0, 40);
+  let b = inventing
+    ? open.find((x) => x.kind === 'custom' && x.title.toLowerCase() === title.toLowerCase())
+    : BLUEPRINTS[d.target]
+      ? open.find((x) => x.kind === d.target)
+      : open.find((x) => x.plot === k.place) ?? open.find((x) => x.by === k.id) ?? open[0];
   let started = false;
   const bp = BLUEPRINTS[d.target];
   // a bridge is built once; asking again just helps with whatever is underway
-  const wanted = bp && !(bp.bridge && (world.builds.some((x) => x.kind === d.target) || OPEN_ISLANDS.includes(bp.bridge)));
+  const wanted = inventing || (bp && !(bp.bridge && (world.builds.some((x) => x.kind === d.target) || OPEN_ISLANDS.includes(bp.bridge))));
   if (!b && wanted && open.length < MAX_OPEN) {
     const here = placesOf(world)[k.place] ?? PLACES.clearing;
     const dist = (p) => Math.hypot(p.x - here.x, p.z - here.z);
-    const plot = bp.bridge ? null : freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
-    if (bp.bridge || plot) {
-      const pay = canAfford(stockOf(world), costOf(d.target));
-      if (!pay.ok) return { missing: pay.missing, title: bp.name };
-      spend(stockOf(world), costOf(d.target));
-      b = { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot?.id ?? null, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
+    const plot = bp?.bridge ? null : freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
+    if (bp?.bridge || plot) {
+      const spec = inventing ? designSpec(d.buildName, d.buildDesign) : null;
+      const priced = inventing ? designCost({ ...spec, design: `${d.buildName} ${spec.design}` }) : null;
+      const cost = priced?.cost ?? costOf(d.target);
+      const pay = canAfford(stockOf(world), cost);
+      if (!pay.ok) return { missing: pay.missing, title: inventing ? title : bp.name };
+      spend(stockOf(world), cost);
+      b = inventing
+        ? { id: world.builds.length + 1, kind: 'custom', title, spec, cost, effort: priced.effort, plot: plot.id, progress: 0, done: false, by: k.id, helpers: [] }
+        : { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot?.id ?? null, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
       world.builds.push(b);
       started = true;
     }
@@ -556,6 +571,8 @@ function ticketLines(world, id) {
   return mine.length ? [`Your tickets still waiting for the visitor: ${mine.map((t) => `"${t.title}"`).join(', ')}.`, ''] : [];
 }
 
+const designOf = (b) => (b.spec?.design ? `: ${b.spec.design}` : '');
+
 // What a koala knows about building: what stands, what is underway, what is possible.
 function buildLines(world) {
   const done = doneBuilds(world);
@@ -566,10 +583,11 @@ function buildLines(world) {
   const affordable = Object.entries(BLUEPRINTS).filter(([id, bp]) => canAfford(stock, costOf(id)).ok
     && !(bp.bridge && ((world.builds ?? []).some((b) => b.kind === id) || OPEN_ISLANDS.includes(bp.bridge))));
   return [
-    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
-    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
+    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}${designOf(b)}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
+    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}${designOf(b)}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
     `Stockpile: ${amounts(stockOf(world))}.`,
     `You can build (with what is in the Stockpile): ${affordable.length ? affordable.map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps, costs ${amounts(costOf(id))})`).join(', ') : 'nothing yet. To build anything, first gather resources and store them in the Stockpile (a bench needs 2 wood from a gum tree)'}. `
+      + `Or invent anything you like: build with target new, a build_name and a build_design (e.g. a game machine, a castle, a footbridge, a fountain). Small costs 2 wood, medium 3 wood and 1 stone, big 5 wood and 3 stone. To keep working on something underway, leave the target empty. `
       + `Building together at the same site goes twice as fast. At most ${MAX_OPEN} things are built at once; ${free} free plot${free === 1 ? '' : 's'} left.`,
     next ? `Every ${LAND_EVERY} finished builds, new land rises from the water; next: ${next.name}.` : 'All the new land has risen.',
   ];
@@ -612,7 +630,7 @@ export function buildPrompt(world, id, clock) {
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
     `approach (go to ${f.name}), give (target: an item you hold, to ${f.name}),`,
     `gather (target: a resource found where you are; wood at the gum trees, water at the pond, stone at the lookout, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
-    'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name),',
+    'build (target: a thing you can build listed above, or new for something you invent (then give a build_name and a build_design); empty to keep working on what is underway),',
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',
     ...(canReadAt(world, k.place) ? ['read (target: a topic you are curious about; open a book about it),'] : []),

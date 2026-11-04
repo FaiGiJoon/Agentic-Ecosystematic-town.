@@ -334,7 +334,8 @@ export function createUI({ scene, api }) {
     const who = (b) => b.helpers.map(name).join(' and ');
     const card = (b) => `
       <div class="bcard${b.done ? ' done' : ''}">
-        <div class="bhead"><b>${esc(b.title)}</b><span>${esc(state.blueprints?.[b.kind]?.name ?? b.kind)}</span></div>
+        <div class="bhead"><b>${esc(b.title)}</b><span>${esc(b.kind === 'custom' ? 'Own invention' : state.blueprints?.[b.kind]?.name ?? b.kind)}</span></div>
+        ${b.kind === 'custom' && b.spec?.design ? `<div class="bmeta">${esc(b.spec.design)}</div>` : ''}
         ${b.done ? '' : `<div class="bar"><i style="width:${Math.round((b.progress / b.effort) * 100)}%;background:var(--warm)"></i></div>`}
         <div class="bmeta">${b.done ? 'Built' : `${b.progress} of ${b.effort} steps`} by ${esc(who(b))}, at the ${esc(state.places[b.plot]?.name ?? b.plot)}</div>
       </div>`;
@@ -356,7 +357,7 @@ export function createUI({ scene, api }) {
       <p class="lastcall">${risen.length ? `New land so far: ${risen.map((l) => esc(l.name)).join(', ')}.` : 'Just the island for now.'}
         ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>
       <h3>What things cost</h3>
-      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}</div>`;
+      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}${['small', 'medium', 'big'].map((size) => `<div><b>Your own invention — ${size}</b><span>${esc(cost(state.customCosts?.[size]?.cost))}</span></div>`).join('')}</div>`;
   }
 
   // Tickets the koalas wrote for you, with a reply box and a close button each.

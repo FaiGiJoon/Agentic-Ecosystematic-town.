@@ -36,13 +36,16 @@ function invent() {
   if (carrying) options.push({ action: 'store', target: '', say: pick(['', 'Into the pile it goes!']), mood: 'happy' }, { action: 'store', target: '', say: '', mood: 'content' });
   if (!here && !carrying) options.push({ action: 'move', target: pick(['big_gum', 'river_gum', 'blue_gum', 'lookout', 'pond']), say: '', mood: 'curious' });
   const bridge = /(bridge_\w+) \(Bridge to/.exec(prompt)?.[1];
-  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', say: 'Let us build a bridge!', mood: 'curious' });
+  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', build_design: '', say: 'Let us build a bridge!', mood: 'curious' });
   if (/You can build/.test(prompt)) {
     const underway = /Being built: (?!nothing)/.test(prompt);
     const names = ['Sky Nest', 'Cozy Corner', 'Moon Perch', 'Gumnut Lodge', 'Pebble Path', 'Snack Shack', 'Glow Post'];
-    const build = () => ({ action: 'build', target: pick(['bench', 'lantern', 'flowerbed', 'birdhouse', 'stones', 'hut', 'treehouse', 'tower']), build_name: pick(names), say: pick(['Let us build something!', 'I have an idea!', '']), mood: 'curious' });
-    const keepGoing = () => ({ action: 'build', target: '', build_name: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
+    const designs = [['Game Machine', 'A little arcade machine with pink buttons and a glowing screen.'], ['Moss Castle', 'A tall green castle with a flag.'], ['Footbridge', 'A small wooden footbridge with a bell.'], ['Fountain', 'A blue fountain with a star on top.']];
+    const invention = () => { const [n, dsg] = pick(designs); return { action: 'build', target: 'new', build_name: n, build_design: dsg, say: 'I have a new idea!', mood: 'curious' }; };
+    const build = () => ({ action: 'build', target: pick(['bench', 'lantern', 'flowerbed', 'birdhouse', 'stones', 'hut', 'treehouse', 'tower']), build_name: pick(names), build_design: '', say: pick(['Let us build something!', 'I have an idea!', '']), mood: 'curious' });
+    const keepGoing = () => ({ action: 'build', target: '', build_name: '', build_design: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
     options.push(build(), underway ? keepGoing() : build(), underway ? keepGoing() : build());
+    if (/Or invent anything/.test(prompt)) options.push(invention());
   }
   if (!/Your tickets still waiting/.test(prompt) && Math.random() < 0.3) {
     options.push({ action: 'file_ticket', target: '', say: pick(['We need more stone to build a bridge. Where can we find it?', 'It gets very dark at night. Could we have more lanterns?', 'My paws are always full. How can I carry more?']), mood: 'curious' });
@@ -61,6 +64,8 @@ function invent() {
     bond: pick([0, 0, 1, 1, 2, -1]),
     opinion: Math.random() < 0.3 ? pick(['A good friend.', 'A bit noisy, but kind.', 'I like having them around.']) : '',
     wish: Math.random() < 0.15 ? pick(['Build a tower to touch the stars.', 'Find a frog and make friends.', 'Write a poem about the moon.']) : '',
+    build_name: '',
+    build_design: '',
     ...d,
   };
 }

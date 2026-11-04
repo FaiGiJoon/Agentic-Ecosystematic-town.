@@ -11,6 +11,7 @@ import {
 import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
 import { BABY_NAMES, babyPersona, bornBaby, graduates } from './grove-family.js';
+import { designCost } from './grove-design.js';
 import { Tickets, MAX_OPEN_TICKETS } from './grove-tickets.js';
 
 export const GROVE_DEFAULTS = {
@@ -672,6 +673,7 @@ export class Grove {
       tickets: this.tickets.list(),
       resources: RESOURCES,
       costs: COSTS,
+      customCosts: Object.fromEntries(['small', 'medium', 'big'].map((size) => [size, designCost({ size, design: '' })])),
       islands: ISLANDS.map((i) => ({ ...i, bridged: bridged(this.world).has(i.id) })),
       koalas: this.#all().map((k) => ({
         ...k,
