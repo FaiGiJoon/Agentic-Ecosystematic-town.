@@ -37,7 +37,7 @@ Sources never run out; gathering takes one decision per unit.
 
 ### Resource islands
 
-Four islands, placed 9–16 m beyond the main island's edge so a bridge reaches them. They replace
+Four islands whose centres sit 13–15 m beyond the main island's edge, so a bridge of 6–8 m reaches them. They replace
 the nearest of the decorative distant islets (the rest stay as scenery):
 
 | Id | Name | Resource | Position (x, z), radius |
