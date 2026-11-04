@@ -139,3 +139,25 @@ under the ears and arms, never on the crown) and nothing else. The first render 
 `set_origin()` reads `matrix_world`, which Blender does not refresh in background mode, so the script now
 offsets the mesh itself. The round-trip check flags the paws as 0.186 m below the ground plane; that is the
 game's rig space (the paw pivots hang below the body group), not an error.
+
+## 7. Visual polish (2026-11-04)
+
+- **Cinematic grade** (`gfx/grade.js`): a keyframed palette through the day drives split-toning,
+  saturation, contrast, exposure and bloom: peach dawn, clean days, honey golden hour with olive
+  shade, rose twilight with teal shade, deep blue nights where lanterns and fireflies bloom.
+- **Ground-contact AO**: GTAO from three's add-ons on High only. Grass, leaf cards, water, sky,
+  particles and anything see-through are left out of its depth/normal pass so wind does not make
+  it crawl. It is the first thing the governor drops, before resolution.
+- **Motion**: koalas ease into and out of walks over the whole route, climb with easing, turn
+  on a critically damped spring, and their stride follows the distance covered.
+- **Koala behaviour** (from koala field notes): fork wedge when asleep up a gum, ball curl when
+  asleep on the ground at night or in the cold early morning, tree hug in the midday heat,
+  nip-and-chew with a sideways jaw while eating, idle weight shift and sway.
+- **Bushland**: paperbarks on the pond bank, termite mounds in the open, rough dark stringybarks
+  among the pale gums.
+- **Particles**: slow dust motes and pollen that glint by day and glow warm in golden hour;
+  brighter fireflies and lantern glass for bloom; a steadier fall of gum leaves.
+- **HUD**: one easing curve, layered glass, tabular numbers, tabs and popovers easing in; panel
+  tucked away on mid-width screens; a two-row top bar on phones.
+- Not done: KTX2/Basis (every texture is generated on the client, so there are no files to
+  compress); a fresh frame-time measurement (the browser pane was hidden, so frames did not run).
