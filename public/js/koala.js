@@ -405,6 +405,7 @@ export class Koala {
     const k = 10;
     let pitch = 0, y = 0, z = 0, headX = 0, headY = 0, breathe = 1 + Math.sin(s * 2) * 0.02;
     let aL = -0.3, aR = -0.3, aZ = 0, lL = -1.35, lR = -1.35, eyes = 1, earFlop = 0;
+    let headZ = 0, sway = 0, shift = 0; // jaw/head tilt, body sway, weight shift
     this.snack.visible = false;
 
     switch (mode) {
@@ -427,10 +428,30 @@ export class Koala {
         aL = -2.4; aR = -2.5 + Math.sin(s * 0.8) * 0.1; lL = lR = -0.7; z = -0.3; headY = Math.sin(s * 0.3) * 0.5; headX = 0.1;
         break;
       case 'eat': {
-        aL = -2.3; aR = -2.15 + Math.sin(s * 3.2) * 0.3; lL = lR = -0.8; z = -0.25; headX = 0.12 + Math.abs(Math.sin(s * 9)) * 0.06;
+        // nip a leaf, then chew: the jaw slides side to side as the molars grind
+        const bite = Math.sin(s * 0.9) > 0.6;
+        aL = -2.3; aR = bite ? -2.45 : -2.0 + Math.sin(s * 3.2) * 0.15; lL = lR = -0.8; z = -0.25;
+        headX = 0.12 + (bite ? -0.08 : Math.abs(Math.sin(s * 6)) * 0.04);
+        headZ = bite ? 0 : Math.sin(s * 6.5) * 0.07;
         this.snack.visible = true;
         break;
       }
+      case 'fork':
+        // asleep wedged in a fork: leaning back against the trunk, arms around it, legs hanging
+        pitch = -0.12; z = -0.22; headX = 0.42; headY = 0.3; headZ = 0.12;
+        aL = -1.75; aR = -1.6; aZ = 0.25; lL = -0.45; lR = -0.2; eyes = 0.1;
+        breathe = 1 + Math.sin(s * 0.9) * 0.05; sway = Math.sin(s * 0.4) * 0.03;
+        break;
+      case 'curl':
+        // a ball against the night cold: head tucked to the chest, limbs drawn in
+        pitch = 0.95; y = -0.3; headX = 0.95; aL = aR = -1.2; aZ = 0.65; lL = lR = -2.05; eyes = 0.1;
+        breathe = 1 + Math.sin(s * 0.85) * 0.055;
+        break;
+      case 'hug':
+        // midday heat: belly against the cool bark, limbs spread around the trunk, cheek to the wood
+        pitch = -0.08; z = -0.42; headX = 0.05; headY = 0.65; aL = aR = -2.05; aZ = -0.45; lL = lR = -1.0; eyes = 0.45;
+        breathe = 1 + Math.sin(s * 1.6) * 0.03;
+        break;
       case 'sleep':
         pitch = 0.55; y = -0.22; headX = 0.55; aL = -0.95; aR = -0.95; aZ = 0.45; lL = lR = -1.5; eyes = 0.12;
         breathe = 1 + Math.sin(s * 1.1) * 0.045;
@@ -457,15 +478,19 @@ export class Koala {
         break;
       }
       default:
+        // idle: look around, shift the weight from side to side, sway a little
         headY = Math.sin(s * 0.45) * 0.45 + Math.sin(s * 1.3) * 0.08;
         headX = Math.sin(s * 0.3) * 0.08;
+        headZ = Math.sin(s * 0.23) * 0.05;
+        sway = Math.sin(s * 0.5) * 0.035;
+        shift = Math.sin(s * 0.35) * 0.03;
         break;
     }
     if (mode !== 'walk') this.stepped = false;
 
     this.blink -= dt;
     if (this.blink < 0) this.blink = 2.5 + Math.random() * 3.5;
-    if (this.blink < 0.12 && mode !== 'sleep') eyes = 0.1;
+    if (this.blink < 0.12 && !['sleep', 'fork', 'curl'].includes(mode)) eyes = 0.1;
     for (const e of this.eyes) e.scale.y = damp(e.scale.y, eyes, 30, dt);
 
     rig.rotation.x = damp(rig.rotation.x, pitch, k, dt);
@@ -473,6 +498,9 @@ export class Koala {
     rig.position.z = damp(rig.position.z, z, k, dt);
     head.rotation.x = damp(head.rotation.x, headX, k, dt);
     head.rotation.y = damp(head.rotation.y, headY, k, dt);
+    head.rotation.z = damp(head.rotation.z, headZ, k, dt);
+    rig.rotation.z = damp(rig.rotation.z, sway, 4, dt);
+    rig.position.x = damp(rig.position.x, shift, 4, dt);
     this.torso.scale.y = breathe;
     arms[0].rotation.x = damp(arms[0].rotation.x, aL, k, dt);
     arms[1].rotation.x = damp(arms[1].rotation.x, aR, k, dt);
@@ -489,7 +517,7 @@ export class Koala {
       this.nut.position.set(Math.cos(t * 3) * 0.75, 2.0 + Math.sin(t * 5) * 0.08, Math.sin(t * 3) * 0.75);
       this.nut.rotation.y += dt * 4;
     }
-    this.zEl.classList.toggle('show', mode === 'sleep');
+    this.zEl.classList.toggle('show', ['sleep', 'fork', 'curl'].includes(mode));
   }
 
   #bubbles(dt) {

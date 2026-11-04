@@ -12,9 +12,11 @@ export function spotFor(places, placeId, koalaId, activity, reach = 1) {
   const p = places[placeId];
   if (!p) return { x: 0, z: 0, y: 0 };
   const side = SIDE[koalaId] ?? 1;
-  if (p.tree && (activity === 'climb' || activity === 'eat')) {
+  if (p.tree && (activity === 'climb' || activity === 'eat' || activity === 'nap')) {
+    // koalas sleep wedged in a fork, eat a little lower, and climb highest
     const a = Math.atan2(-p.z, -p.x) + side * 0.9;
-    return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: (activity === 'climb' ? 3.0 : 2.4) * reach };
+    const height = activity === 'climb' ? 3.0 : activity === 'nap' ? 2.6 : 2.4;
+    return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: height * reach };
   }
   if (placeId === 'swing' && activity === 'play') return { x: p.x + side * 1.1, z: p.z, y: 0 };
   const r = placeId === 'pond' ? 5.4 : p.tree ? 1.9 : placeId === 'swing' || p.build ? 2.4 : p.land ? 1.4 : 1.6;
@@ -29,6 +31,15 @@ export function animFor({ activity, place }) {
   if (activity === 'play') return place === 'swing' ? 'swing' : place === 'pond' ? 'splash' : 'ball';
   if (activity === 'build') return 'build';
   return 'idle';
+}
+
+// What the body does, from what the koala is doing, where, and when (after koala field notes):
+// asleep up a tree it wedges into a fork; asleep on the ground in the night or the cold early
+// morning it curls into a ball; clinging to a trunk in the midday heat it hugs the cool bark.
+export function postureFor({ anim, hour, inTree }) {
+  if (anim === 'sleep') return inTree ? 'fork' : hour >= 20 || hour < 7 ? 'curl' : 'sleep';
+  if (anim === 'cling' && hour >= 11 && hour < 15) return 'hug';
+  return anim;
 }
 
 // New land is reached only over its bridge, which runs straight from the island toward the

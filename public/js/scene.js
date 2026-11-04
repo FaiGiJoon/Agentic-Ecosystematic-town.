@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
+import { spotFor, animFor, postureFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
 import { gradeAt } from './gfx/grade.js';
 import { Critters } from './gfx/critters.js';
@@ -699,10 +699,10 @@ export class GroveScene {
       }
       this.#carry(view, carried(k));
       const spot = spotFor(this.places, k.place, k.id, k.activity, k.reach);
-      const anim = animFor(k);
+      const anim = postureFor({ anim: animFor(k), hour: state.clock.hour, inTree: spot.y > 0.3 });
       view.setGoal(spot, anim, this.walk(view.pos, spot), this.#faceFor(k, spot));
       view.tagState.textContent = k.thinking ? 'thinking…' : `${k.mood}`;
-      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
+      view.tagIcon.setAttribute('href', `#i-${{ sleep: 'nap', eat: 'eat', swing: 'play', splash: 'play', ball: 'play', cling: 'climb', build: 'build', fork: 'nap', curl: 'nap', hug: 'climb' }[k.activity === 'gather' ? 'build' : anim] ?? 'sit'}`);
       view.tagEl.classList.toggle('thinking', k.thinking);
     }
   }
@@ -764,7 +764,7 @@ export class GroveScene {
     const p = this.places[k.place];
     if (!p) return null;
     const toward = (x, z) => Math.atan2(x - spot.x, z - spot.z);
-    if (p.tree && (k.activity === 'climb' || k.activity === 'eat')) return toward(p.x, p.z);
+    if (p.tree && (k.activity === 'climb' || k.activity === 'eat' || k.activity === 'nap')) return toward(p.x, p.z);
     if (k.place === 'pond') return toward(p.x, p.z);
     if (k.place === 'swing' && k.activity === 'play') return 0;
     if (p.build && k.activity === 'build') return toward(p.x, p.z);
@@ -999,7 +999,7 @@ export class GroveScene {
         const f = list.find((o) => o !== v);
         const df = Math.hypot(f.pos.x - v.pos.x, f.pos.z - v.pos.z);
         const dv = Math.hypot(vp.x - v.pos.x, vp.z - v.pos.z);
-        const look = dv < 4 && v.anim !== 'sleep' ? vp : df < 7 ? f.pos : { x: v.pos.x * 1.5, z: v.pos.z * 1.5 + 4 };
+        const look = dv < 4 && !['sleep', 'fork', 'curl'].includes(v.anim) ? vp : df < 7 ? f.pos : { x: v.pos.x * 1.5, z: v.pos.z * 1.5 + 4 };
         const want = Math.atan2(look.x - v.pos.x, look.z - v.pos.z);
         let d = want - v.heading;
         d = Math.atan2(Math.sin(d), Math.cos(d));
