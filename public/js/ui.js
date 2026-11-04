@@ -10,9 +10,9 @@ const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></
 const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
-  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', sit: 'sitting',
+  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;

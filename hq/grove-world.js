@@ -63,7 +63,7 @@ export const SIGHTINGS = [
   'A turtle poked its head out of its shell and blinked at you.',
   'A frog croaked somewhere near the lily pads.',
 ];
-export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'sit'];
+export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'research', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
 // the same site. A finished build stands at its plot and becomes a place to visit.
@@ -267,6 +267,9 @@ export function parseDecision(raw, koala, places = PLACES) {
     }
   } else if (action === 'build') {
     if (!BLUEPRINTS[target]) target = ''; // keep working on what is underway
+  } else if (action === 'research') {
+    target = text(obj.target, 120); // the question, as asked
+    if (!target) action = 'sit';
   } else if (action === 'gather') {
     if (!RESOURCES.includes(target)) {
       action = 'sit';
@@ -292,6 +295,7 @@ export function parseDecision(raw, koala, places = PLACES) {
 function describe(d, friendName, strength, places) {
   switch (d.action) {
     case 'file_ticket': return 'wrote a ticket for the visitor';
+    case 'research': return `looked up "${d.target}" in the library`;
     case 'move': return `went to the ${places[d.target].name}`;
     case 'eat': return `ate eucalyptus at the ${PLACES[d.target].name}`;
     case 'climb': {
@@ -570,6 +574,7 @@ export function buildPrompt(world, id, clock) {
     'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name),',
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',
+    ...(k.place === 'library_isle' ? ['research (target: a short question to look up in the library and on the web; a few times a day),'] : []),
     'sit.',
     'Choose what you do next.',
   ];

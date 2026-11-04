@@ -12,9 +12,9 @@ const USAGE = { cost_usd: 0.002, tokens_in: 1500, tokens_out: 80, duration_ms: 9
 function setup({ config = {}, decide, path: dbPath, rng = () => 0.5 } = {}) {
   let t = Date.UTC(2026, 9, 31, 12);
   const calls = [];
-  const brain = async ({ koala, system, prompt }) => {
-    calls.push({ koala, system, prompt });
-    return decide ? decide(koala, calls.length) : { ok: true, raw: { action: 'sit', say: '', mood: 'content' }, usage: USAGE };
+  const brain = async (req) => {
+    calls.push(req);
+    return decide ? decide(req.koala, calls.length) : { ok: true, raw: { action: 'sit', say: '', mood: 'content' }, usage: USAGE };
   };
   const grove = new Grove({ path: dbPath, config: { dayUsd: 1, ...config }, think: brain, now: () => t, rng });
   return { grove, calls, advance: (ms) => (t += ms), now: () => t };
@@ -347,4 +347,42 @@ test('a due baby is born in the grove, can be named once, and later thinks for i
   await openRound(grove, advance, 70000);
   s = grove.state();
   assert.equal(s.koalas.find((k) => k.id === pip.id).follows, null);
+});
+
+test('research at Library Isle: one extra call with web search, the fact remembered, limited per day', async () => {
+  const research = [];
+  const { grove, calls, advance } = setup({
+    config: { researchPerDay: 3 },
+    decide: (k, n) => {
+      const req = calls[n - 1];
+      if (req.kind === 'research') {
+        research.push(req);
+        return { ok: true, raw: { fact: `Koalas get most of their water from gum leaves. ${'x'.repeat(300)}`, idea: 'We could build a well.' }, usage: USAGE };
+      }
+      return { ok: true, raw: k === 'crystal' ? { action: 'research', target: 'How do koalas find water?' } : { action: 'sit' }, usage: USAGE };
+    },
+  });
+  grove.world.builds = [{ id: 1, kind: 'bridge_library_isle', title: 'Bridge to Library Isle', plot: null, progress: 4, effort: 4, done: true, by: 'crystal', helpers: ['crystal'] }];
+  grove.world.koalas.crystal.place = 'library_isle';
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.equal(research.length, 1);
+  assert.ok(research[0].args.includes('WebSearch'));
+  assert.match(research[0].prompt, /How do koalas find water\?/);
+  const crystal = grove.state().koalas.find((k) => k.id === 'crystal');
+  assert.match(crystal.memories.at(-1), /^Koalas get most of their water/);
+  assert.ok(crystal.memories.at(-1).length <= 200);
+  assert.match(crystal.recent.join(' '), /We could build a well/);
+  assert.equal(grove.state().usage.byKoala.crystal.today.calls, 2, 'the research call is metered too');
+  for (let i = 0; i < 3; i++) await openRound(grove, advance, 70000);
+  assert.equal(research.length, 3, 'three a day');
+  assert.match(grove.state().koalas.find((k) => k.id === 'crystal').recent.join(' '), /library is closed/);
+});
+
+test('research anywhere but Library Isle is refused without a call', async () => {
+  const { grove, calls, advance } = setup({ decide: () => ({ ok: true, raw: { action: 'research', target: 'Why is the sky blue?' }, usage: USAGE }) });
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.ok(!calls.some((c) => c.kind === 'research'));
+  assert.match(grove.state().koalas[0].recent.join(' '), /only at Library Isle/);
 });

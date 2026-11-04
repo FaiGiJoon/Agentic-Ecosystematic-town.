@@ -47,3 +47,15 @@ test('config: the koalas default to Haiku, a $0.05 call budget and a $0.50 day',
   assert.equal(config.grove.dayUsd, 0.5);
   assert.equal(config.port, 4317);
 });
+
+test('config: research is limited to 3 a day at $0.10 each by default, and the limit must be a whole number', async () => {
+  const { default: config } = await import('../hq/config.js');
+  assert.equal(config.grove.researchPerDay, 3);
+  assert.equal(config.grove.researchUsd, 0.1);
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, ['-e', "import('./hq/config.js')"], {
+    cwd: new URL('..', import.meta.url), env: { ...process.env, GROVE_RESEARCH_PER_DAY: '0' }, encoding: 'utf8',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /GROVE_RESEARCH_PER_DAY/);
+});

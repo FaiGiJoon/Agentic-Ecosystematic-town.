@@ -37,6 +37,38 @@ export function koalaArgs({ system, prompt, model, callUsd }) {
   ];
 }
 
+// A research trip: a koala at Library Isle looks one question up. The only tool is web search;
+// the answer comes back as a short fact to remember and, maybe, an idea for the grove.
+export const RESEARCH_SCHEMA = {
+  type: 'object',
+  properties: {
+    fact: { type: 'string', description: 'What the koala learned, as one short sentence a koala could remember.' },
+    idea: { type: 'string', description: 'One idea for the grove this suggests, or empty.' },
+  },
+  required: ['fact', 'idea'],
+  additionalProperties: false,
+};
+export const RESEARCH_SYSTEM = 'You are the friendly library of a small koala grove. A koala asks you one question. '
+  + 'Look it up with web search if that helps, then answer simply and truthfully, in words a young koala understands.';
+
+export function researchArgs({ prompt, model, callUsd }) {
+  return [
+    '-p', prompt,
+    '--output-format', 'json',
+    '--model', model,
+    '--system-prompt', RESEARCH_SYSTEM,
+    '--json-schema', JSON.stringify(RESEARCH_SCHEMA),
+    '--tools', 'WebSearch',
+    '--allowedTools', 'WebSearch',
+    '--setting-sources', '',
+    '--strict-mcp-config',
+    '--disable-slash-commands',
+    '--permission-mode', 'dontAsk',
+    '--no-session-persistence',
+    '--max-budget-usd', String(callUsd),
+  ];
+}
+
 // The result message: all of stdout as one JSON object, or else the last line that is one.
 function resultFrom(stdout) {
   const tryParse = (s) => {

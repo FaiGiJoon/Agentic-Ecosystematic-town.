@@ -26,6 +26,9 @@ export default {
     bin: env.GROVE_BIN || env.CLAUDE_BIN || 'claude',
     callUsd: positiveNumber('GROVE_CALL_USD', env.GROVE_CALL_USD, 0.05, { max: 1 }),
     dayUsd: positiveNumber('GROVE_DAY_USD', env.GROVE_DAY_USD, 0.5),
+    // research trips use web search: rarer, and with their own budget
+    researchPerDay: positiveNumber('GROVE_RESEARCH_PER_DAY', env.GROVE_RESEARCH_PER_DAY, 3, { integer: true, max: 50 }),
+    researchUsd: positiveNumber('GROVE_RESEARCH_USD', env.GROVE_RESEARCH_USD, 0.1, { max: 1 }),
   },
   root,
   dataDir: path.join(root, 'data'),
