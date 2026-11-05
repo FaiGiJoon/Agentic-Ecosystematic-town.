@@ -15,7 +15,7 @@ test('two koalas with their own personas, and a grove of known places', () => {
     assert.ok(PLACES[id], id);
     assert.equal(typeof PLACES[id].x, 'number');
   }
-  assert.equal(Object.values(PLACES).filter((p) => p.tree).length, 3);
+  assert.equal(Object.values(PLACES).filter((p) => p.tree).length, 6);
   assert.ok(ITEMS.includes('leaf'));
 });
 

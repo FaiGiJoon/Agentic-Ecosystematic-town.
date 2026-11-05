@@ -1,6 +1,8 @@
 // Pure helpers between the grove's server state and what the page draws.
 // No three.js or DOM here, so the tests can run them under Node.
 
+import { ISLAND } from './gfx/terrain-math.js';
+
 const SIDE = { crystal: -1, ruby: 1 };
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -19,7 +21,7 @@ export function spotFor(places, placeId, koalaId, activity, reach = 1) {
     return { x: p.x + Math.cos(a) * 0.62, z: p.z + Math.sin(a) * 0.62, y: height * reach };
   }
   if (placeId === 'swing' && activity === 'play') return { x: p.x + side * 1.1, z: p.z, y: 0 };
-  const r = placeId === 'pond' ? 5.4 : p.tree ? 1.9 : placeId === 'swing' || p.build ? 2.4 : p.land ? 1.4 : 1.6;
+  const r = placeId === 'pond' ? 5.4 : p.pool ? 4.4 : p.tree ? 1.9 : placeId === 'swing' || p.build ? 2.4 : p.land ? 1.4 : 1.6;
   const a = Math.atan2(-p.z, -p.x) + side * 0.55;
   return { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r, y: 0 };
 }
@@ -45,7 +47,7 @@ export function postureFor({ anim, hour, inTree }) {
 // New land is reached only over its bridge, which runs straight from the island toward the
 // land's centre. Returns the waypoints to walk through (none when no bridge is crossed).
 export const BRIDGE_IN = 2.5; // the island end of a bridge, this far in from the island's edge
-export const bridgeEnds = (land, island = 24) => {
+export const bridgeEnds = (land, island = ISLAND) => {
   const d = Math.hypot(land.x, land.z);
   const ux = land.x / d;
   const uz = land.z / d;
@@ -55,7 +57,7 @@ export const bridgeEnds = (land, island = 24) => {
   };
 };
 
-export function landRoute(from, to, lands, island = 24) {
+export function landRoute(from, to, lands, island = ISLAND) {
   const on = (p) => lands.find((l) => Math.hypot(p.x - l.x, p.z - l.z) < l.r + 0.5) ?? null;
   const a = on(from);
   const b = on(to);
@@ -177,6 +179,15 @@ export function glide(speed, distance, dt, { max, accel }) {
   if (brake < max) v = Math.max(v, Math.min(0.15, want)); // braking: never crawl forever at the very end
   const step = Math.min(distance, v * dt);
   return { speed: step === distance ? 0 : v, step };
+}
+
+// How fast to walk a trip of `length` metres: the usual pace (walk, accel) for a short one, and
+// on a long one fast enough to arrive in about 10 s, with the accelerating sped up to match.
+// Worked out once when the trip starts, so the koala does not slow down as it goes.
+export const TRIP_S = 9;
+export function tripPace(length, { walk, accel }) {
+  const max = Math.max(walk, (Number(length) || 0) / TRIP_S);
+  return max === walk ? { max: walk, accel } : { max, accel: Math.max(accel, max / 1.6) };
 }
 
 // --- layout ------------------------------------------------------------------------------

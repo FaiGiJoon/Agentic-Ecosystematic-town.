@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { furMaterial } from './gfx/materials.js';
 import { koalaPart } from './koala-parts.js';
-import { glide } from './view.js';
+import { glide, tripPace } from './view.js';
 
 const TAU = Math.PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -330,7 +330,17 @@ export class Koala {
     this.goal = goal;
     this.anim = anim;
     this.face = face;
-    if (moved) this.path = path;
+    if (moved) {
+      this.path = path;
+      // the whole walk, worked out once: a long one is walked faster (tripPace)
+      let len = 0;
+      for (let i = 0, a = this.pos; i <= path.length; i++) {
+        const b = path[i] ?? goal;
+        len += Math.hypot(b.x - a.x, b.z - a.z);
+        a = b;
+      }
+      this.tripLen = len;
+    }
   }
 
   get arrived() {
@@ -366,10 +376,12 @@ export class Koala {
         left += Math.hypot(b.x - a.x, b.z - a.z);
         a = b;
       }
-      const g = glide(this.speed, left, dt, { max: WALK * pace, accel: 3.2 * pace });
+      const trip = tripPace(this.tripLen ?? left, { walk: WALK * pace, accel: 3.2 * pace });
+      const g = glide(this.speed, left, dt, trip);
       this.speed = g.speed;
       const step = Math.min(far, g.step);
-      this.stride += (step / (WALK * pace)) * 9; // the legs keep pace with the ground, no sliding
+      // the legs keep pace with the ground on a stroll; on a long dash they quicken, not spin
+      this.stride += (step / (WALK * pace)) * 9 / Math.sqrt(trip.max / (WALK * pace));
       p.x += (dx / far) * step;
       p.z += (dz / far) * step;
       this.#turn(Math.atan2(dx, dz), 10, dt);

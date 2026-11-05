@@ -68,12 +68,21 @@ export class Critters {
     const pond = places.pond;
     this.list = [
       { kind: 'turtle', home: { x: pond.x + 8, z: pond.z - 1 }, phase: 0, mesh: turtle() },
-      { kind: 'turtle', home: { x: -6, z: 17 }, phase: 2, mesh: turtle() },
+      { kind: 'turtle', home: { x: -15, z: 39.5 }, phase: 2, mesh: turtle() },
       ...[0, 2.1, 4.2].map((phase) => ({ kind: 'frog', home: pond, phase, mesh: frog() })),
       { kind: 'bird', home: places.big_gum, phase: 0, mesh: bird('#8a6a4a', '#f2eadc') }, // a kookaburra
       { kind: 'bird', home: places.big_gum, phase: Math.PI, mesh: bird('#c8463a', '#3f6fb0') }, // a rosella
       { kind: 'bird', home: places.river_gum, phase: 1, mesh: bird('#e8e2d6', '#f2c14e') }, // a cockatoo
       { kind: 'bird', home: places.blue_gum, phase: 2.5, mesh: bird('#4f8a54', '#c8463a') }, // a lorikeet
+      // and out on the new land
+      ...[
+        places.waterfall_pool && [0.7, 3.5].map((phase) => ({ kind: 'frog', home: places.waterfall_pool, phase, mesh: frog() })),
+        places.fern_gully && { kind: 'turtle', home: { x: places.fern_gully.x + 4, z: places.fern_gully.z + 3 }, phase: 1, mesh: turtle() },
+        places.eucalyptus_forest && { kind: 'bird', home: places.eucalyptus_forest, phase: 0.5, mesh: bird('#8a6a4a', '#f2eadc') }, // a kookaburra
+        places.ghost_gum && { kind: 'bird', home: places.ghost_gum, phase: 2, mesh: bird('#e8e2d6', '#f2c14e') }, // a cockatoo
+        places.red_gum && { kind: 'bird', home: places.red_gum, phase: 4, mesh: bird('#c8463a', '#3f6fb0') }, // a rosella
+        places.sunrise_meadow && { kind: 'bird', home: places.sunrise_meadow, phase: 1.2, mesh: bird('#4f8a54', '#c8463a') }, // a lorikeet
+      ].flat().filter(Boolean),
     ];
     const SCALE = { turtle: 1.4, frog: 1.6, bird: 1.3 }; // big enough to spot over the grass
     for (const c of this.list) {

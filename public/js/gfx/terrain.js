@@ -9,12 +9,13 @@ import { TILE } from './materials.js';
 
 const TAU = Math.PI * 2;
 
-// R = worn path, B = baked occlusion (dark under trees, rocks, logs), A = water depth in metres.
+// R = worn path, G = sand (the beach), B = baked occlusion (dark under trees, rocks, logs),
+// A = water depth in metres.
 // blobs: [{ x, z, r, s }] soft round occluders; caps: [{ ax, az, bx, bz, r, s }] elongated ones.
 export function buildSplat({ terrain, size, blobs, caps = [] }) {
   const data = new Uint8Array(size * size * 4);
   const span = ISLAND * 2;
-  const pond = terrain.pond;
+  const pools = terrain.pools ?? [{ x: terrain.pond.x, z: terrain.pond.z, shore: SHORE_R }];
   for (let j = 0; j < size; j++) {
     const z = ((j + 0.5) / size - 0.5) * span;
     for (let i = 0; i < size; i++) {
@@ -22,8 +23,9 @@ export function buildSplat({ terrain, size, blobs, caps = [] }) {
       const o = (j * size + i) * 4;
       if (Math.hypot(x, z) > ISLAND + 0.6) continue;
       data[o] = terrain.pathMask(x, z) * 255;
-      // water only exists near the pond, so the height is only needed there
-      if (Math.hypot(x - pond.x, z - pond.z) < SHORE_R + 2) {
+      if (terrain.sandMask) data[o + 1] = terrain.sandMask(x, z) * 255;
+      // water only exists in the pond and the pools, so the height is only needed there
+      if (pools.some((p) => Math.hypot(x - p.x, z - p.z) < p.shore + 2)) {
         const h = terrain.height(x, z);
         data[o + 3] = h < WATER_Y ? Math.min(1, (WATER_Y - h) / 1.0) * 255 : 0;
       }
@@ -122,7 +124,7 @@ export function buildLawn({ terrain, rings, segs, material }) {
 
 // The rock under the lawn: strata, ledges and a noisy silhouette, tapering to a point.
 // `radius` scales it, so the same code builds the islets.
-export function buildCliff({ radius = ISLAND, depth = 14, top = -0.9, rings = 30, segs = 96, seed = 1, material }) {
+export function buildCliff({ radius = ISLAND, depth = ISLAND * 0.32, top = -0.9, rings = 30, segs = 96, seed = 1, material }) {
   const n = (rings + 1) * (segs + 1);
   const pos = new Float32Array(n * 3);
   const uv = new Float32Array(n * 2);
@@ -219,13 +221,13 @@ export function tube(points, r0, r1, radial = 5, uvRepeat = 1, colorTop = null) 
 }
 
 // Roots hanging from the underside of the lawn's rim.
-export function buildRoots({ count = 16, seed = 4, material }) {
+export function buildRoots({ count = 40, seed = 4, material }) {
   const r = rng(seed);
   const geos = [];
   for (let i = 0; i < count; i++) {
     const a = r() * TAU;
-    const rad = ISLAND * (0.78 + r() * 0.16);
-    const len = 2.5 + r() * 5;
+    const rad = ISLAND * (0.93 + r() * 0.08);
+    const len = 3 + r() * 9;
     const pts = [];
     const sway = (r() - 0.5) * 1.6;
     for (let k = 0; k < 9; k++) {

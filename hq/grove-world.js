@@ -41,18 +41,28 @@ export function migrateNames(text) {
   return String(text ?? '').replace(/\bMallee\b/g, 'Crystal').replace(/\bBramble\b/g, 'Ruby');
 }
 
-// Grove-space coordinates (metres); the page builds the same places in 3D.
+// Grove-space coordinates (metres); the page builds the same places in 3D. The old grove is the
+// heart of the island (spread 2.5x about the clearing when the island grew to 107 m); the new
+// places stand out across the rest of it, one in every direction.
 export const PLACES = {
-  big_gum: { name: 'Big Gum', x: -8, z: -6, tree: true },
-  river_gum: { name: 'River Gum', x: 9, z: -9, tree: true },
-  blue_gum: { name: 'Blue Gum', x: -12, z: 8, tree: true },
-  pond: { name: 'Lily Pond', x: 10, z: 2 },
-  swing: { name: 'Rope Swing', x: 2, z: -12 },
+  big_gum: { name: 'Big Gum', x: -20, z: -18, tree: true },
+  river_gum: { name: 'River Gum', x: 22.5, z: -25.5, tree: true },
+  blue_gum: { name: 'Blue Gum', x: -30, z: 17, tree: true },
+  pond: { name: 'Lily Pond', x: 25, z: 2 },
+  swing: { name: 'Rope Swing', x: 5, z: -33 },
   clearing: { name: 'Sunny Clearing', x: 0, z: 2 },
-  hollow: { name: 'Mossy Hollow', x: -15, z: -1 },
-  lookout: { name: 'Lookout Rock', x: 14, z: 12 },
-  flowers: { name: 'Blossom Patch', x: -2, z: 13 },
-  stockpile: { name: 'Stockpile', x: 2.6, z: 4.4 },
+  hollow: { name: 'Mossy Hollow', x: -37.5, z: -5.5 },
+  lookout: { name: 'Lookout Rock', x: 35, z: 27 },
+  flowers: { name: 'Blossom Patch', x: -5, z: 29.5 },
+  stockpile: { name: 'Stockpile', x: 6.5, z: 8 },
+  eucalyptus_forest: { name: 'Eucalyptus Forest', x: 56, z: -24, tree: true },
+  ghost_gum: { name: 'Ghost Gum', x: -23.5, z: 55, tree: true },
+  red_gum: { name: 'Red Gum', x: -36, z: -55.5, tree: true },
+  sunrise_meadow: { name: 'Sunrise Meadow', x: 10, z: 73 },
+  misty_hill: { name: 'Misty Hill', x: -69, z: -34.5 },
+  fern_gully: { name: 'Fern Gully', x: -62, z: 1 },
+  waterfall_pool: { name: 'Waterfall Pool', x: 66, z: 26, pool: true },
+  sandy_cove: { name: 'Sandy Cove', x: 25.5, z: -86.5 },
 };
 
 export const ITEMS = ['leaf', 'blossom', 'pebble', 'ball', 'feather'];
@@ -86,16 +96,23 @@ export const BLUEPRINTS = {
 };
 const MAX_OPEN = 2;
 // New land: every LAND_EVERY finished builds, the next piece rises from the water off the island.
+// It rises 10 to 12 m beyond the island's edge.
 export const LANDS = [
-  { id: 'fern_islet', name: 'Fern Islet', x: 0, z: -36, r: 7 },
-  { id: 'sunset_point', name: 'Sunset Point', x: 34, z: 15, r: 6.5 },
-  { id: 'moss_isle', name: 'Moss Isle', x: -34, z: 17, r: 7 },
+  { id: 'fern_islet', name: 'Fern Islet', x: 0, z: -119, r: 7 },
+  { id: 'sunset_point', name: 'Sunset Point', x: 109.9, z: 48.5, r: 6.5 },
+  { id: 'moss_isle', name: 'Moss Isle', x: -108.2, z: 54.1, r: 7 },
 ];
 const LAND_EVERY = 2;
-// Open ground for building: in the wedges between the paths that fan out from the clearing,
-// and two spots on each piece of new land.
+// Open ground for building. The first eight sit in the wedges between the paths that fan out from
+// the clearing (spread 2.5x with the grove, so old builds stay on their plots); the rest are spread
+// over the whole island on open ground, clear of places, paths, water and bridges. Two spots on
+// each piece of new land.
 export const PLOTS = [
-  [3.4, 10.3], [6.0, 16.8], [-4.8, 8.4], [-9.0, 14.0], [-2.9, -6.5], [-5.4, -14.1], [4.0, -7.2], [-8.9, 3.2],
+  [8.5, 22.75], [15, 39], [-12, 18], [-22.5, 32], [-7.25, -19.25], [-13.5, -38.25], [10, -21], [-22.25, 5],
+  [95.5, -9.5], [-92, -29.5], [53, -73.5], [-83.5, 38], [75.5, 60], [-26.5, 92], [-51.5, -81], [-1.5, -88.5],
+  [29, 86], [50, 6.5], [-62.5, 72.5], [80.5, -45.5], [-65.5, 6.5], [-51, -36.5], [92, 26], [40.5, -37.5],
+  [-5.5, 67], [46, 42], [12.5, -60], [-72.5, -59], [-52.5, 42], [-21.5, -64.5], [68.5, -20], [-94.5, 11],
+  [-30, 62.5], [-0.5, 93], [52, 76], [75, 7.5], [-27.5, -91], [28, 59.5], [-43.5, 19], [30.5, -7.5],
 ].map(([x, z], i) => ({ id: `plot_${i + 1}`, x, z, land: null })).concat(LANDS.flatMap((l) => [0.6, 0.6 + Math.PI].map((a, i) => ({
   id: `plot_${l.id}_${i + 1}`, x: Math.round((l.x + Math.cos(a) * 3.5) * 10) / 10, z: Math.round((l.z + Math.sin(a) * 3.5) * 10) / 10, land: l.id,
 }))));
@@ -629,7 +646,7 @@ export function buildPrompt(world, id, clock) {
     ...buildLines(world),
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
     `approach (go to ${f.name}), give (target: an item you hold, to ${f.name}),`,
-    `gather (target: a resource found where you are; wood at the gum trees, water at the pond, stone at the lookout, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
+    `gather (target: a resource found where you are; wood at the gum trees, water at the pond and waterfall_pool, stone at the lookout and misty_hill, sand at sandy_cove, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
     'build (target: a thing you can build listed above, or new for something you invent (then give a build_name and a build_design); empty to keep working on what is underway),',
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',

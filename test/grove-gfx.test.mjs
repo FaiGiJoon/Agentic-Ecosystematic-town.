@@ -63,7 +63,8 @@ test('terrain: bounded, finite and rolls off at the island edge', () => {
       max = Math.max(max, h);
     }
   }
-  assert.ok(max < 1.2 && min > -1.8, `range ${min.toFixed(2)}..${max.toFixed(2)}`);
+  // the highest ground is Misty Hill; the lowest the bottom of the pond
+  assert.ok(max < 3.6 && min > -1.8, `range ${min.toFixed(2)}..${max.toFixed(2)}`);
   assert.ok(T.height(ISLAND, 0) < T.height(ISLAND - 8, 0) - 0.5, 'the rim is lower than the lawn');
 });
 
@@ -204,6 +205,10 @@ test('bushland: paperbarks stand on the pond bank, termite mounds out on open gr
   const all = [...s.paperbarks, ...s.mounds];
   for (const a of all) for (const b of all) if (a !== b) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 2.5, 'not on top of each other');
   assert.deepEqual(bushlandSpots(T, P, { avoid: forest, seed: 5 }), s, 'the same grove every time');
+  // the bigger island asks for more mounds, still clear of everything
+  const many = bushlandSpots(T, P, { avoid: forest, seed: 5, count: 9 });
+  assert.equal(many.mounds.length, 9);
+  for (const m of many.mounds) assert.equal(T.blocked(m.x, m.z, 1), false);
 });
 
 test('a road is worn from the clearing to the Library bridge foot', async () => {

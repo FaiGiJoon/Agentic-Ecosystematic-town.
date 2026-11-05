@@ -3,12 +3,17 @@
 
 export const RESOURCES = ['wood', 'water', 'sand', 'stone', 'book'];
 
-// Floating islands off the main island, each reached by a bridge the koalas build.
+// The main island's radius in metres. The page's ISLAND (public/js/gfx/terrain-math.js) is the
+// same number; a test keeps them equal.
+export const ISLAND_R = 107;
+
+// Floating islands off the main island, each reached by a bridge the koalas build. They sit
+// 13 to 15 m beyond the edge, so every bridge is short.
 export const ISLANDS = [
-  { id: 'spring_isle', name: 'Spring Isle', resource: 'water', x: -30, z: -22, r: 6 },
-  { id: 'sandy_shoal', name: 'Sandy Shoal', resource: 'sand', x: 38, z: -6, r: 6.5 },
-  { id: 'stone_crag', name: 'Stone Crag', resource: 'stone', x: 24, z: -30, r: 5.5 },
-  { id: 'library_isle', name: 'Library Isle', resource: 'book', x: -8, z: 38, r: 6 },
+  { id: 'spring_isle', name: 'Spring Isle', resource: 'water', x: -96.9, z: -71.1, r: 6 },
+  { id: 'sandy_shoal', name: 'Sandy Shoal', resource: 'sand', x: 120, z: -18.9, r: 6.5 },
+  { id: 'stone_crag', name: 'Stone Crag', resource: 'stone', x: 75.9, z: -94.8, r: 5.5 },
+  { id: 'library_isle', name: 'Library Isle', resource: 'book', x: -25.1, z: 119.2, r: 6 },
 ];
 
 // Islands reachable from day one: their bridge already stands and is never built.
@@ -19,13 +24,19 @@ export const SOURCES = {
   big_gum: ['wood'],
   river_gum: ['wood'],
   blue_gum: ['wood'],
+  eucalyptus_forest: ['wood'],
+  ghost_gum: ['wood'],
+  red_gum: ['wood'],
   fern_islet: ['wood'],
   pond: ['water'],
+  waterfall_pool: ['water'],
   spring_isle: ['water'],
   sandy_shoal: ['sand'],
   sunset_point: ['sand'],
+  sandy_cove: ['sand'],
   stone_crag: ['stone'],
   lookout: ['stone'],
+  misty_hill: ['stone'],
   library_isle: ['book'],
 };
 
@@ -47,7 +58,6 @@ export const COSTS = {
 export const START_STOCK = { wood: 4 };
 
 export const BRIDGE_IN = 2.5; // a bridge starts this far in from the island's edge
-const ISLAND_R = 24;
 
 export const costOf = (kind) => (kind.startsWith('bridge_') ? COSTS.bridge : COSTS[kind] ?? {});
 export const islandById = (id) => ISLANDS.find((i) => i.id === id) ?? null;

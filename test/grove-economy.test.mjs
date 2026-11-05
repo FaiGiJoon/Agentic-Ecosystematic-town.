@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KOALAS, LANDS, newKoala, parseDecision, applyDecision, buildPrompt, groveClock, placesOf } from '../hq/grove-world.js';
-import { RESOURCES, ISLANDS, COSTS, START_STOCK, bridged } from '../hq/grove-economy.js';
+import { RESOURCES, ISLANDS, COSTS, START_STOCK, ISLAND_R, bridged } from '../hq/grove-economy.js';
 
 const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])), builds: [] });
 const act = (w, id, raw) => applyDecision(w, id, parseDecision(raw, w.koalas[id], placesOf(w)));
@@ -17,8 +17,8 @@ test('five resources, and the spec\'s four resource islands', () => {
 test('resource islands sit off the edge, reachable by a short bridge, overlapping nothing', () => {
   for (const i of ISLANDS) {
     const d = Math.hypot(i.x, i.z);
-    assert.ok(d - 24 >= 13 && d - 24 <= 15, `${i.id} centre ${d - 24} beyond the edge`);
-    assert.ok(d - i.r - 24 < 9, `${i.id} bridge ${d - i.r - 24} long`);
+    assert.ok(d - ISLAND_R >= 13 && d - ISLAND_R <= 15, `${i.id} centre ${d - ISLAND_R} beyond the edge`);
+    assert.ok(d - i.r - ISLAND_R < 9, `${i.id} bridge ${d - i.r - ISLAND_R} long`);
   }
   const all = [...ISLANDS, ...LANDS];
   for (const a of all) for (const b of all) {
@@ -145,7 +145,7 @@ test('the Library Isle is open from day one: bridged, a place, reachable, and it
   assert.equal(d.target, 'library_isle');
   assert.equal(d.note ?? '', '');
   const foot = bridgeFoot(islandById('library_isle'));
-  assert.ok(Math.abs(foot.x + 4.4) < 0.2 && Math.abs(foot.z - 21) < 0.2);
+  assert.ok(Math.abs(foot.x + 21.5) < 0.2 && Math.abs(foot.z - 102.3) < 0.2, `foot ${foot.x},${foot.z}`);
   w.stock = { wood: 20, stone: 20 };
   assert.doesNotMatch(buildPrompt(w, 'crystal', groveClock(0)), /bridge_library_isle/);
   assert.match(buildPrompt(w, 'crystal', groveClock(0)), /bridge_sandy_shoal/);
