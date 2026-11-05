@@ -50,7 +50,7 @@ test('config: the koalas default to Haiku, a $0.05 call budget and a $0.50 day',
 
 test('config: research costs $0.10 each by default, and the limit must be a whole number', async () => {
   const { default: config } = await import('../hq/config.js');
-  assert.equal(config.grove.researchPerDay, 6);
+  assert.equal(config.grove.researchPerDay, 16);
   assert.equal(config.grove.researchUsd, 0.1);
   const { spawnSync } = await import('node:child_process');
   const r = spawnSync(process.execPath, ['-e', "import('./hq/config.js')"], {
@@ -60,9 +60,9 @@ test('config: research costs $0.10 each by default, and the limit must be a whol
   assert.match(r.stderr, /GROVE_RESEARCH_PER_DAY/);
 });
 
-test('config: research defaults to 6 a day; reads default to 16 a day at $0.03', async () => {
+test('config: research defaults to 16 a day; reads default to 16 a day at $0.03', async () => {
   const { default: config } = await import('../hq/config.js');
-  assert.equal(config.grove.researchPerDay, 6);
+  assert.equal(config.grove.researchPerDay, 16);
   assert.equal(config.grove.readsPerDay, 16);
   assert.equal(config.grove.readUsd, 0.03);
   const { spawnSync } = await import('node:child_process');

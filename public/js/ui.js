@@ -313,6 +313,9 @@ export function createUI({ scene, api }) {
         <div class="opinion">${k.opinion ? `On ${esc(friend(k).name)}: “${esc(k.opinion)}”` : `No opinion of ${esc(friend(k).name)} yet.`}</div>
         <div class="holds">Holding: ${k.inventory.length ? k.inventory.map(esc).join(', ') : 'nothing'}</div>
         <div class="holds">${k.wish ? `Wish: “${esc(k.wish)}”` : 'No wish yet.'}</div>
+        <div class="holds mind">${esc(k.wisdomLabel ?? 'Curious baby')} · wisdom ${Math.round(k.wisdom ?? 0)}${k.nextWisdom ? ` (${esc(k.nextWisdom.label)} at ${k.nextWisdom.at})` : ''}</div>
+        ${(k.traits ?? []).length ? `<div class="holds">Personality: ${k.traits.map(esc).join(' · ')}</div>` : ''}
+        ${(k.curiosities ?? []).length ? `<div class="holds">Wonders about: ${k.curiosities.map(esc).join(', ')}</div>` : ''}
         <details><summary>Learned (${(k.learned ?? []).length})</summary>
           <ul>${(k.learned ?? []).map((m) => `<li>${esc(m)}</li>`).join('') || '<li class="muted">Nothing yet. Koalas learn at the library.</li>'}</ul>
         </details>

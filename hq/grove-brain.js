@@ -44,12 +44,13 @@ export const RESEARCH_SCHEMA = {
   properties: {
     fact: { type: 'string', description: 'What the koala learned, as one short sentence a koala could remember.' },
     idea: { type: 'string', description: 'One idea for the grove this suggests, or empty.' },
+    curiosity: { type: 'string', description: 'A related topic, a few words, the koala could wonder about next, or empty.' },
   },
-  required: ['fact', 'idea'],
+  required: ['fact', 'idea', 'curiosity'],
   additionalProperties: false,
 };
 export const RESEARCH_SYSTEM = 'You are the friendly library of a small koala grove. A koala asks you one question. '
-  + 'Look it up with web search if that helps, then answer simply and truthfully, in words a young koala understands.';
+  + 'Look it up with web search, then answer truthfully, at the level the koala is ready for.';
 
 export function researchArgs({ prompt, model, callUsd }) {
   return [
@@ -71,7 +72,7 @@ export function researchArgs({ prompt, model, callUsd }) {
 
 // Reading: a koala opens a picture book at a topic. No tools; the book answers from what it knows.
 export const READ_SYSTEM = "You are a picture book in the koala grove's library. The koala opens you at a topic; "
-  + 'tell one true, simple, interesting thing about it, and maybe an idea for the grove.';
+  + 'tell one true, interesting thing about it at the level the koala is ready for, and maybe an idea for the grove.';
 
 export function readArgs({ prompt, model, callUsd }) {
   return [

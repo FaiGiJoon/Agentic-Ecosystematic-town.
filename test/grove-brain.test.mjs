@@ -83,7 +83,7 @@ test('a missing binary is an error, not a crash', async () => {
 });
 
 test('researchArgs: the same isolation, but web search as the only tool, its own budget and schema', () => {
-  assert.deepEqual(RESEARCH_SCHEMA.required, ['fact', 'idea']);
+  assert.deepEqual(RESEARCH_SCHEMA.required, ['fact', 'idea', 'curiosity']);
   assert.deepEqual(researchArgs({ prompt: 'Q', model: 'claude-haiku-5-5', callUsd: 0.1 }), [
     '-p', 'Q',
     '--output-format', 'json',

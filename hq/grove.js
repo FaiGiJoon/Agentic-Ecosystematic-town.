@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
   KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, canReadAt, growthOf, carryLimit,
+  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES,
 } from './grove-world.js';
 import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
@@ -32,7 +33,7 @@ export const GROVE_DEFAULTS = {
   presenceMs: 45000, // the page must check in this often
   tickMs: 1000,
   maxFailures: 3,
-  researchPerDay: 6,
+  researchPerDay: 16,
   readsPerDay: 16,
   readUsd: 0.03,
   researchUsd: 0.1,
@@ -305,8 +306,8 @@ export class Grove {
       k.recent.push('You wanted to look something up, but the library is closed: the grove has used its tokens for today.');
       return false;
     }
-    if (k.place !== 'library_isle') {
-      k.recent.push('You wanted to look something up, but you can research only at Library Isle.');
+    if (!canReadAt(this.world, k.place)) {
+      k.recent.push('You wanted to look something up, but you can research only at the library or somewhere with books.');
       return false;
     }
     const day = startOfDay(this.now());
@@ -344,9 +345,17 @@ export class Grove {
   // What comes back is kept in `learned` and told to koalas at the same place.
   async #learn(id, topic, { web }) {
     const k = this.world.koalas[id];
+    const w = wisdomOf(k);
+    const known = relevantLearned({ ...k, wish: `${k.wish ?? ''} ${topic}` }, 4);
+    const about = [
+      `${k.name} is a ${w.wisdomLabel.toLowerCase()} koala, curious about ${interestsOf(k).join(', ') || 'everything'}.`,
+      ...((k.traits ?? []).length ? [`${k.name}'s personality: ${k.traits.join('; ')}.`] : []),
+      ...(known.length ? [`${k.name} already knows:`, ...known.map((f) => `- ${f}`), 'Tell something new, that builds on this rather than repeating it.'] : []),
+      w.wisdomStyle,
+    ].join('\n');
     const prompt = web
-      ? `${k.name} the koala asks: ${topic}\nAnswer as a short fact a koala could remember, and one idea for the grove, or empty.`
-      : `${k.name} the koala opens a book about: ${topic}\nTell one true, simple thing about it as a short fact a koala could remember, and one idea for the grove, or empty.`;
+      ? `${k.name} the koala asks: ${topic}\n${about}\nAnswer as one fact the koala can remember, one idea for the grove (or empty), and one related topic the koala could wonder about next (or empty).`
+      : `${k.name} the koala opens a book about: ${topic}\n${about}\nTell one true thing about it as a fact the koala can remember, one idea for the grove (or empty), and one related topic the koala could wonder about next (or empty).`;
     const args = web
       ? researchArgs({ prompt, model: this.config.model, callUsd: this.config.researchUsd })
       : readArgs({ prompt, model: this.config.model, callUsd: this.config.readUsd });
@@ -361,16 +370,28 @@ export class Grove {
     if (typeof raw === 'string') {
       try { raw = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); } catch { raw = null; }
     }
-    const fact = typeof raw?.fact === 'string' ? raw.fact.trim().replace(/\s+/g, ' ').slice(0, 200) : '';
+    const fact = typeof raw?.fact === 'string' ? raw.fact.trim().replace(/\s+/g, ' ').slice(0, 280) : '';
     if (u) this.q.usage.run(this.now(), id, fact ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms);
     if (!out.ok || !fact) {
       this.#log({ koala: id, kind: 'error', text: `${k.name}'s ${web ? 'research' : 'reading'} found nothing: ${out.error ?? 'no answer'}` });
       return;
     }
     const idea = typeof raw.idea === 'string' ? raw.idea.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
-    k.learned = [...(k.learned ?? []), fact].slice(-8);
+    k.learned = [...(k.learned ?? []), fact].slice(-MAX_LEARNED);
     const trim = (x) => { if (x.recent.length > 10) x.recent.splice(0, x.recent.length - 10); };
     k.recent.push(`${web ? 'On the web you found out' : 'At the library you read'}: ${fact}${idea ? ` It gave you an idea: ${idea}` : ''}`);
+    const before = w.wisdomLabel;
+    k.wisdom = (Number(k.wisdom) || 0) + (web ? 2 : 1);
+    const after = wisdomOf(k).wisdomLabel;
+    if (after !== before) {
+      k.recent.push(`You feel wiser. You are a ${after.toLowerCase()} now!`);
+      this.#log({ koala: id, kind: 'grow', text: `${k.name} grew wiser: a ${after.toLowerCase()} now.` });
+    }
+    const next = typeof raw.curiosity === 'string' ? raw.curiosity.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
+    if (next && !interestsOf(k).some((c) => c.toLowerCase() === next.toLowerCase())) {
+      k.curiosities = [...(k.curiosities ?? []), next].slice(-MAX_CURIOSITIES);
+      k.recent.push(`Now you wonder about ${next}.`);
+    }
     trim(k);
     for (const o of this.#all()) {
       if (o.id === id || o.place !== k.place) continue;
@@ -678,6 +699,7 @@ export class Grove {
       koalas: this.#all().map((k) => ({
         ...k,
         ...growthOf(k),
+        ...wisdomOf(k),
         color: KOALAS.find((f) => f.id === k.id)?.color ?? k.color ?? '#a8a29a',
         thinking: this.#run[k.id].thinking,
         nextAt: this.#run[k.id].nextAt === Infinity ? null : this.#run[k.id].nextAt,
