@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { customPlan, panelStartsCollapsed, postureFor, critterPath, stockText, carried, RESOURCE_COLORS, landRoute, spotFor, animFor, fmtUsd, fmtTokens, freshLog, statusOf, skyAt } from '../public/js/view.js';
-import { PLACES } from '../hq/grove-world.js';
+import { PLACES, PLOTS, LANDS } from '../hq/grove-world.js';
+import { ISLANDS } from '../hq/grove-economy.js';
+import { ISLAND } from '../public/js/gfx/terrain-math.js';
 
 test('koalas at the same place stand apart, and stand beside the pond, not in it', () => {
   const a = spotFor(PLACES, 'clearing', 'crystal', 'sit');
@@ -73,24 +75,26 @@ test('building plays the hammering animation', () => {
 });
 
 test('walking to new land goes over its bridge, and back again', () => {
-  const fern = { id: 'fern_islet', x: 0, z: -36, r: 7 };
-  const moss = { id: 'moss_isle', x: -34, z: 17, r: 7 };
+  const fern = LANDS.find((l) => l.id === 'fern_islet');
+  const moss = LANDS.find((l) => l.id === 'moss_isle');
   const lands = [fern, moss];
-  const out = landRoute({ x: 0, z: 2 }, { x: 0, z: -36 }, lands);
+  const out = landRoute({ x: 0, z: 2 }, fern, lands);
   assert.equal(out.length, 2);
-  assert.ok(Math.hypot(out[0].x, out[0].z) < 24, 'starts on the island');
+  assert.ok(Math.hypot(out[0].x, out[0].z) < ISLAND, 'starts on the island');
+  assert.ok(Math.hypot(out[0].x, out[0].z) > ISLAND - 3, 'at the edge');
   assert.ok(Math.hypot(out[1].x - fern.x, out[1].z - fern.z) < fern.r, 'ends on the islet');
-  assert.deepEqual(landRoute({ x: 0, z: -36 }, { x: 0, z: 2 }, lands), [...out].reverse());
+  assert.deepEqual(landRoute(fern, { x: 0, z: 2 }, lands), [...out].reverse());
   assert.equal(landRoute({ x: 0, z: 2 }, { x: 5, z: 5 }, lands).length, 0, 'island to island: no bridge');
-  assert.equal(landRoute({ x: 1, z: -35 }, { x: -1, z: -37 }, lands).length, 0, 'within one islet');
-  assert.equal(landRoute({ x: 0, z: -36 }, { x: -34, z: 17 }, lands).length, 4, 'islet to islet: over both bridges');
+  assert.equal(landRoute({ x: fern.x + 1, z: fern.z + 1 }, { x: fern.x - 1, z: fern.z - 1 }, lands).length, 0, 'within one islet');
+  assert.equal(landRoute(fern, moss, lands).length, 4, 'islet to islet: over both bridges');
 });
 
 test('at a build site the koalas stand clear of the build, apart from each other', () => {
-  const places = { ...PLACES, plot_1: { name: 'Leaf Hut', x: 3.4, z: 10.3, build: 'hut', done: true } };
+  const p1 = PLOTS.find((p) => p.id === 'plot_1');
+  const places = { ...PLACES, plot_1: { name: 'Leaf Hut', x: p1.x, z: p1.z, build: 'hut', done: true } };
   const a = spotFor(places, 'plot_1', 'crystal', 'build');
   const b = spotFor(places, 'plot_1', 'ruby', 'build');
-  for (const s of [a, b]) assert.ok(Math.hypot(s.x - 3.4, s.z - 10.3) >= 2.2);
+  for (const s of [a, b]) assert.ok(Math.hypot(s.x - p1.x, s.z - p1.z) >= 2.2);
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 1.2);
 });
 
@@ -108,14 +112,14 @@ test('carried lists each resource unit a koala holds, in resource order', () => 
 });
 
 test('walking to a bridged resource island crosses its bridge', () => {
-  const sandy = { id: 'sandy_shoal', x: 38, z: -6, r: 6.5 };
-  const out = landRoute({ x: 0, z: 2 }, { x: 38, z: -6 }, [sandy]);
+  const sandy = ISLANDS.find((i) => i.id === 'sandy_shoal');
+  const out = landRoute({ x: 0, z: 2 }, { x: sandy.x, z: sandy.z }, [sandy]);
   assert.equal(out.length, 2);
   assert.ok(Math.hypot(out[1].x - sandy.x, out[1].z - sandy.z) < sandy.r);
 });
 
 test('critters keep to their homes: turtles crawl, frogs hop by the pond, birds circle up high', () => {
-  const home = { x: 10, z: 2 };
+  const home = PLACES.pond;
   for (let t = 0; t <= 60; t += 0.25) {
     const turtle = critterPath('turtle', t, home);
     assert.ok(Math.hypot(turtle.x - home.x, turtle.z - home.z) <= 6, `turtle at ${t}`);
