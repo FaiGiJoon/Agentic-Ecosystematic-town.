@@ -180,16 +180,19 @@ export class Effects {
 }
 
 // Fireflies and pollen: every point is animated in the vertex shader from a fixed seed.
-export function buildAmbient({ scene, count, bounds, groundY }) {
+// follow: the motes fill a box `bounds` metres either side of uCenter (the visitor) and wrap
+// around it as it moves, each staying put in the world until it falls off the far side; y is
+// then height above uCenter.y. Without follow they are scattered once over a disc of `bounds`.
+export function buildAmbient({ scene, count, bounds, groundY, follow = false }) {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count * 2);
   for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2;
     const d = Math.sqrt(Math.random()) * bounds;
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d;
+    const x = follow ? (Math.random() * 2 - 1) * bounds : Math.cos(a) * d;
+    const z = follow ? (Math.random() * 2 - 1) * bounds : Math.sin(a) * d;
     pos[i * 3] = x;
-    pos[i * 3 + 1] = groundY(x, z) + 0.4 + Math.random() * 3.2;
+    pos[i * 3 + 1] = (follow ? 0 : groundY(x, z)) + 0.4 + Math.random() * 3.2;
     pos[i * 3 + 2] = z;
     seed[i * 2] = Math.random() * 100;
     seed[i * 2 + 1] = Math.random();
@@ -197,19 +200,28 @@ export function buildAmbient({ scene, count, bounds, groundY }) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 2));
-  const u = { uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 1 }, uGolden: { value: 0 }, uScale: { value: 800 } };
+  const u = {
+    uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 1 }, uGolden: { value: 0 }, uScale: { value: 800 },
+    uCenter: { value: new THREE.Vector3() }, uBounds: { value: follow ? bounds : 0 },
+  };
   const m = new THREE.ShaderMaterial({
     uniforms: u,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: /* glsl */ `
       attribute vec2 aSeed;
-      uniform float uTime, uNight, uDay, uGolden, uScale;
+      uniform float uTime, uNight, uDay, uGolden, uScale, uBounds;
+      uniform vec3 uCenter;
       varying float vA; varying float vMode; varying float vGold;
       void main(){
         float t = uTime, s = aSeed.x;
         // by day these are dust motes and pollen, drifting slowly in the light; by night, fireflies
         float drift = mix(0.4, 1.0, uNight);
-        vec3 p = position + vec3(sin(t * 0.45 * drift + s) * 1.6 + sin(t * 1.1 + s * 3.0) * 0.3, sin(t * 1.2 * drift + s * 2.0) * 0.45, cos(t * 0.37 * drift + s * 1.7) * 1.6);
+        vec3 base = position;
+        if (uBounds > 0.0) {
+          base.xz = uCenter.xz + mod(position.xz - uCenter.xz + uBounds, 2.0 * uBounds) - uBounds;
+          base.y += uCenter.y;
+        }
+        vec3 p = base + vec3(sin(t * 0.45 * drift + s) * 1.6 + sin(t * 1.1 + s * 3.0) * 0.3, sin(t * 1.2 * drift + s * 2.0) * 0.45, cos(t * 0.37 * drift + s * 1.7) * 1.6);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float fire = uNight;

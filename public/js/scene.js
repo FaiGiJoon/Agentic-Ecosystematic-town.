@@ -8,23 +8,32 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Koala } from './koala.js';
-import { spotFor, animFor, postureFor, skyAt, landRoute, carried, RESOURCE_COLORS } from './view.js';
+import { spotFor, animFor, postureFor, skyAt, landRoute, carried, RESOURCE_COLORS, BRIDGE_IN } from './view.js';
 import { BuildLayer } from './gfx/builds.js';
 import { gradeAt } from './gfx/grade.js';
 import { Critters } from './gfx/critters.js';
 import { buildTextures } from './gfx/textures.js';
-import { makeTerrain, bushlandSpots, ISLAND, SHORE_R, WATER_Y } from './gfx/terrain-math.js';
+import { makeTerrain, bushlandSpots, ISLAND, SHORE_R, WATER_Y, GROVE_R } from './gfx/terrain-math.js';
 import { SETTINGS, pickInitialTier, parseQuality, ladder, Governor } from './gfx/quality.js';
 import { shared, groundMaterial, waterMaterial, RIPPLES } from './gfx/materials.js';
 import { Sky } from './gfx/sky.js';
 import { buildSplat, buildLawn, buildCliff, buildRoots, buildIslet } from './gfx/terrain.js';
 import { buildGrass, eucalypt, treeMeshes, leafMaterials, rockGeometry, rockMaterial, fernMesh, bushShape, flowerMeshes } from './gfx/flora.js';
-import { buildProps, buildMounds, animatePond } from './gfx/props.js';
+import { buildProps, buildMounds, animatePond, buildLandmarks, animateLandmarks } from './gfx/props.js';
 import { Effects, buildAmbient } from './gfx/particles.js';
 import { Post } from './gfx/post.js';
 import { rng } from './gfx/noise.js';
 
 const DAY_MS = 20 * 60000;
+// Haze by day; a little thicker at night. Thin enough that the far side of the island
+// (about 200 m away) and the islets beyond still show through.
+const FOG = 0.0034;
+const FOG_NIGHT = 0.0012;
+// The visitor's pace on foot, and running with Shift (m/s).
+const VISITOR_WALK = 6.5;
+const VISITOR_RUN = 14;
+// The sun's shadow covers a square this many metres either side of the visitor, and follows them.
+const SHADOW_HALF = 40;
 const TAU = Math.PI * 2;
 const HIGH = SETTINGS.high;
 // Two cameras, both at ground level and neither shows a person, only the koalas: first person (the
@@ -42,23 +51,28 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // smooth pale gums, and a few rough, dark stringybarks among them
 const BARK = ['#e9e0d1', '#d8c8b2', '#cfc6bd', '#e4d3c0', '#c9bba6', '#8f7259', '#7d644f'].map((c) => new THREE.Color(c));
 const LEAF = ['#8aa67c', '#7a9a70', '#98b085', '#8fa97a', '#86a58a', '#a1b58c', '#7d9c78'].map((c) => new THREE.Color(c));
-// The three named gums keep their own look.
+// The named gums keep their own look: the ghost gum is chalk white, the red gum ruddy.
 const HERO = {
   big_gum: { bark: '#ede4d6', leaves: ['#86a47a', '#76966c', '#94ad82'], h: 7.4, seed: 51 },
   river_gum: { bark: '#dacbb8', leaves: ['#7a9a72', '#8aa686', '#6a8c68'], h: 6.6, seed: 52 },
   blue_gum: { bark: '#cfc5bb', leaves: ['#8eab9c', '#7c9e92', '#a0bbaa'], h: 6.9, seed: 53 },
+  eucalyptus_forest: { bark: '#e6dccb', leaves: ['#7f9f74', '#6f9068', '#8eaa80'], h: 8.4, seed: 54 },
+  ghost_gum: { bark: '#f8f6f1', leaves: ['#9cb48e', '#8aa680', '#a9bf98'], h: 8.8, seed: 55 },
+  red_gum: { bark: '#b98c70', leaves: ['#71926a', '#7f9c72', '#668760'], h: 7.8, seed: 56 },
 };
 
 function readPref() {
   try { return localStorage.getItem('grove-quality'); } catch { return null; }
 }
 
-// The library bridge stands from day one: its foot is 21.5 out toward the island (grove-economy's bridgeFoot).
+// The library bridge stands from day one: its foot is BRIDGE_IN in from the island's edge,
+// toward the isle (grove-economy's bridgeFoot).
 function libraryRoad(places) {
   const l = places.library_isle;
   if (!l) return [];
   const d = Math.hypot(l.x, l.z) || 1;
-  return [{ x: (l.x / d) * 21.5, z: (l.z / d) * 21.5 }];
+  const r = ISLAND - BRIDGE_IN;
+  return [{ x: (l.x / d) * r, z: (l.z / d) * r }];
 }
 
 export class GroveScene {
@@ -126,7 +140,7 @@ export class GroveScene {
     this.groundY = (x, z) => this.buildLayer?.heightAt(x, z) ?? T.height(x, z);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0xbfd0e0, 0.0068);
+    this.scene.fog = new THREE.FogExp2(0xbfd0e0, FOG);
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1600);
     this.camera.position.set(4, 3.1, 17.5);
     this.controls = new OrbitControls(this.camera, r.domElement);
@@ -253,10 +267,10 @@ export class GroveScene {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -34;
-    sc.right = sc.top = 34;
+    sc.left = sc.bottom = -SHADOW_HALF;
+    sc.right = sc.top = SHADOW_HALF;
     sc.near = 1;
-    sc.far = 170;
+    sc.far = 200;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.05;
     // a soft fill from the camera's side, so faces in the sun's shadow stay readable
@@ -273,21 +287,38 @@ export class GroveScene {
 
     // 1. where the trees stand: three named gums, a forest, and trees on the islets
     const heroes = Object.entries(HERO).filter(([id]) => places[id]).map(([id, h]) => ({ id, ...h, x: places[id].x, z: places[id].z }));
+    // The forest: thick about the grove, thinner out on the new land, and a real stand of gums
+    // at the Eucalyptus Forest. One tree costs the same anywhere, so the count is the budget.
     const forest = [];
-    for (let tries = 0; tries < 4000 && forest.length < 38; tries++) {
+    const plant = (x, z, gap) => {
+      if (T.blocked(x, z, 3.4) || forest.some((t) => Math.hypot(t.x - x, t.z - z) < gap)) return false;
+      forest.push({ x, z });
+      return true;
+    };
+    for (let tries = 0; tries < 6000 && forest.length < 64; tries++) {
       const a = rand() * TAU;
-      const d = 7.5 + (ISLAND - 3 - 7.5) * Math.pow(rand(), 0.62);
+      const d = 7.5 + (GROVE_R + 6 - 7.5) * Math.pow(rand(), 0.62);
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
       // the south side faces the default camera: keep it open so the view over the lawn is clear
-      if (z / d > 0.28 && d > 7) continue;
-      if (T.blocked(x, z, 3.4) || forest.some((t) => Math.hypot(t.x - x, t.z - z) < 4.8)) continue;
-      forest.push({ x, z });
+      if (z / d > 0.28 && d > 7 && d < GROVE_R) continue;
+      plant(x, z, 4.8);
+    }
+    const stand = places.eucalyptus_forest;
+    for (let tries = 0, n = 0; stand && tries < 1500 && n < 20; tries++) {
+      const a = rand() * TAU;
+      const d = 5 + Math.sqrt(rand()) * 14;
+      if (plant(stand.x + Math.cos(a) * d, stand.z + Math.sin(a) * d, 4.2)) n++;
+    }
+    for (let tries = 0, n = 0; tries < 8000 && n < 70; tries++) {
+      const a = rand() * TAU;
+      const d = Math.sqrt(GROVE_R ** 2 + rand() * ((ISLAND - 3) ** 2 - GROVE_R ** 2));
+      if (plant(Math.cos(a) * d, Math.sin(a) * d, 7.5)) n++;
     }
 
     lap('forest-spots');
     // paperbarks on the pond bank and termite mounds in the open (koala bushland)
-    this.bush = bushlandSpots(T, places, { avoid: forest, seed: 5 });
+    this.bush = bushlandSpots(T, places, { avoid: forest, seed: 5, count: 9 });
     // 2. props, rocks, bushes, ferns, flowers: their positions also bake occlusion into the ground
     const props = buildProps({ places, terrain: T, tex, rand });
     this.props = props;
@@ -296,11 +327,15 @@ export class GroveScene {
     this.ballRest = props.ballRest;
     this.shroomMat = props.shroomMat;
     group.add(props.group);
+    // the new land's landmarks: Misty Hill, the waterfall, Fern Gully, the Sandy Cove
+    this.landmarks = buildLandmarks({ places, terrain: T, tex, rand });
+    group.add(this.landmarks.group);
 
     const rockGeos = [3, 8, 13, 21].map((s) => rockGeometry(s));
     const rockMat = rockMaterial(tex);
     const rocks = [];
-    for (let tries = 0; tries < 400 && rocks.length < 46; tries++) {
+    // rocks, bushes and wild flowers: d is uniform in distance, so they thin out with area
+    for (let tries = 0; tries < 2000 && rocks.length < 150; tries++) {
       const a = rand() * TAU;
       const d = 4 + rand() * (ISLAND - 6);
       const x = Math.cos(a) * d;
@@ -327,7 +362,7 @@ export class GroveScene {
     group.add(...rockMeshes);
 
     const bushes = [];
-    for (let tries = 0; tries < 300 && bushes.length < 26; tries++) {
+    for (let tries = 0; tries < 1500 && bushes.length < 90; tries++) {
       const a = rand() * TAU;
       const d = 5 + rand() * (ISLAND - 5);
       const x = Math.cos(a) * d;
@@ -342,7 +377,28 @@ export class GroveScene {
       const a = rand() * TAU;
       const x = t.x + Math.cos(a) * (1.1 + rand() * 1.4);
       const z = t.z + Math.sin(a) * (1.1 + rand() * 1.4);
-      if (!T.blocked(x, z, -1.0) && T.pathMask(x, z) < 0.2 && T.height(x, z) > WATER_Y + 0.1) ferns.push({ x, z });
+      if (!T.blocked(x, z, -1.0) && T.pathMask(x, z) < 0.2 && !T.wet(x, z, 0.1)) ferns.push({ x, z });
+    }
+    // Fern Gully: a damp hollow full of them
+    const gully = places.fern_gully;
+    for (let i = 0, n = 0; gully && i < 600 && n < 90; i++) {
+      const a = rand() * TAU;
+      const d = 1.8 + Math.sqrt(rand()) * 9;
+      const x = gully.x + Math.cos(a) * d;
+      const z = gully.z + Math.sin(a) * d;
+      if (T.pathMask(x, z) > 0.2 || T.blocked(x, z, -1.2)) continue;
+      ferns.push({ x, z });
+      n++;
+    }
+    // and around the waterfall pool
+    for (const w of T.pools.filter((q) => q.id !== 'pond')) {
+      for (let i = 0; i < 18; i++) {
+        const a = rand() * TAU;
+        const rr = w.shore + 0.7 + rand() * 1.8;
+        const x = w.x + Math.cos(a) * rr;
+        const z = w.z + Math.sin(a) * rr;
+        if (T.pathMask(x, z) < 0.2) ferns.push({ x, z });
+      }
     }
     for (let i = 0; i < 30; i++) {
       const a = Math.PI * 0.6 + rand() * 2.4;
@@ -358,19 +414,31 @@ export class GroveScene {
       patch.push({ x: fl.x + Math.cos(a) * d, z: fl.z + Math.sin(a) * d });
     }
     const wild = [];
-    for (let tries = 0; tries < 900 && wild.length < 150; tries++) {
+    for (let tries = 0; tries < 3000 && wild.length < 520; tries++) {
       const a = rand() * TAU;
-      const d = Math.sqrt(rand()) * (ISLAND - 1.5);
+      const d = Math.sqrt(rand()) * (rand() < 0.45 ? GROVE_R : ISLAND - 1.5);
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
-      if (T.pathMask(x, z) > 0.3 || T.height(x, z) < WATER_Y + 0.08) continue;
+      if (T.pathMask(x, z) > 0.3 || T.wet(x, z, 0.08) || T.sandMask(x, z) > 0.3) continue;
       wild.push({ x, z });
+    }
+    // Sunrise Meadow: a wide drift of warm flowers
+    const meadow = [];
+    const mw = places.sunrise_meadow;
+    for (let i = 0; mw && i < 700 && meadow.length < 360; i++) {
+      const a = rand() * TAU;
+      const d = 1.6 + Math.sqrt(rand()) * 9.5;
+      const x = mw.x + Math.cos(a) * d;
+      const z = mw.z + Math.sin(a) * d;
+      if (T.pathMask(x, z) > 0.3) continue;
+      meadow.push({ x, z });
     }
 
     lap('props+scatter');
     // 3. ground: splat map, lawn, cliff, roots, grass
     const blobs = [
       ...props.blobs,
+      ...this.landmarks.blobs,
       ...heroes.map((h) => ({ x: h.x, z: h.z, r: 3.2, s: 0.9 })),
       ...forest.map((t) => ({ x: t.x, z: t.z, r: 2.4, s: 0.75 })),
       ...rocks.map((o) => ({ x: o.x, z: o.z, r: o.k * 2.4 + 0.4, s: 0.5 })),
@@ -379,14 +447,14 @@ export class GroveScene {
       ...this.bush.paperbarks.map((t) => ({ x: t.x, z: t.z, r: 1.8, s: 0.6 })),
       ...this.bush.mounds.map((m) => ({ x: m.x, z: m.z, r: 1.7 * m.k, s: 0.65 })),
     ];
-    const splat = buildSplat({ terrain: T, size: S.texSize, blobs, caps: props.caps });
+    const splat = buildSplat({ terrain: T, size: S.splatSize ?? S.texSize, blobs, caps: props.caps });
     lap('splat');
     this.splat = splat;
     const gMat = groundMaterial({ tex, splat, island: ISLAND });
     this.ground = buildLawn({ terrain: T, rings: S.terrainRings, segs: S.terrainSegs, material: gMat });
     group.add(this.ground);
     const rockCliff = new THREE.MeshStandardMaterial({ map: tex.rock.map, normalMap: tex.rock.normal, normalScale: new THREE.Vector2(1.4, 1.4), vertexColors: true, roughness: 0.96 });
-    group.add(buildCliff({ rings: 36, segs: S.terrainSegs, material: rockCliff }));
+    group.add(buildCliff({ rings: 48, segs: S.terrainSegs, material: rockCliff }));
     const rootMat = new THREE.MeshStandardMaterial({ map: tex.bark.map, normalMap: tex.bark.normal, color: '#7a5a3e', vertexColors: true, roughness: 0.95 });
     group.add(buildRoots({ material: rootMat }));
     lap('lawn+cliff');
@@ -403,6 +471,15 @@ export class GroveScene {
     this.water.receiveShadow = true;
     this.water.renderOrder = 2;
     group.add(this.water);
+    // the waterfall's pool, the same water
+    for (const w of T.pools.filter((q) => q.id !== 'pond')) {
+      const m = new THREE.Mesh(new THREE.CircleGeometry(w.shore + 1.1, 44), wMat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(w.x, WATER_Y + 0.015, w.z);
+      m.receiveShadow = true;
+      m.renderOrder = 2;
+      group.add(m);
+    }
 
     // 5. trees
     const mats = leafMaterials(tex);
@@ -413,7 +490,7 @@ export class GroveScene {
       const shape = eucalypt({ seed: h.seed, height: h.h, trunkR: 0.58, lean: 0.25 + (h.seed % 3) * 0.1, branches: 9, clusters: 28, cards: 18 });
       const leafC = h.leaves.map((c) => new THREE.Color(c));
       const g = treeMeshes({
-        shape, mats, barkMat,
+        shape, mats, barkMat, cull: true,
         instances: [{ x: h.x, y: T.height(h.x, h.z), z: h.z, yaw: h.seed, scale: 1, bark: new THREE.Color(h.bark), leaf: leafC[0] }],
       });
       group.add(g);
@@ -432,7 +509,12 @@ export class GroveScene {
     const isletTrees = [];
     const isletRock = new THREE.MeshStandardMaterial({ map: tex.rock.map, normalMap: tex.rock.normal, vertexColors: true, roughness: 0.96 });
     const isletGrass = new THREE.MeshStandardMaterial({ color: '#7fa05a', map: tex.grass.map, normalMap: tex.grass.normal, roughness: 0.95 });
-    const sites = [[-82, 6, -70, 9], [96, 14, -48, 7.5], [-120, -4, 40, 10.5], [72, 22, 96, 6.5], [10, 30, -140, 12]];
+    // (out past the resource islands: each moved out with the island's edge, and grew a little)
+    const sites = [[-82, 6, -70, 9], [96, 14, -48, 7.5], [-120, -4, 40, 10.5], [72, 22, 96, 6.5], [10, 30, -140, 12]].map(([x, y, z, rad]) => {
+      const d = Math.hypot(x, z);
+      const k = (d + ISLAND - 24) / d;
+      return [x * k, y * 1.6, z * k, rad * 1.6];
+    });
     sites.slice(0, HIGH.islets).forEach(([x, y, z, rad], i) => {
       const { group: ig, spots } = buildIslet({ radius: rad, seed: i + 2, rockMat: isletRock, grassMat: isletGrass });
       ig.position.set(x, y, z);
@@ -448,13 +530,24 @@ export class GroveScene {
       const j = Math.floor(rand() * (i + 1));
       [all[i], all[j]] = [all[j], all[i]];
     }
+    // Batched by patch of the island (FOREST_CELL m square), so the camera and the sun's shadow,
+    // which only covers the ground round the visitor, skip the patches they cannot see.
+    const FOREST_CELL = 54;
     shapes.forEach((shape, v) => {
       const list = all.filter((_, i) => i % shapes.length === v).map((t) => ({
         ...t, yaw: rand() * TAU, scale: 0.85 + rand() * 0.5, bark: BARK[Math.floor(rand() * BARK.length)], leaf: LEAF[Math.floor(rand() * LEAF.length)],
       }));
-      const g = treeMeshes({ shape, mats, barkMat, instances: list });
-      group.add(g);
-      this.forest.push(g);
+      const cells = new Map();
+      for (const t of list) {
+        const key = `${Math.floor(t.x / FOREST_CELL)},${Math.floor(t.z / FOREST_CELL)}`;
+        if (!cells.has(key)) cells.set(key, []);
+        cells.get(key).push(t);
+      }
+      for (const instances of cells.values()) {
+        const g = treeMeshes({ shape, mats, barkMat, instances, cull: true });
+        group.add(g);
+        this.forest.push(g);
+      }
     });
 
     // paperbarks: slender, pale papery bark, narrow grey-green leaves
@@ -478,6 +571,7 @@ export class GroveScene {
     group.add(bushMeshes);
     group.add(...flowerMeshes({ spots: patch, terrain: T, palette: ['#f08aa0', '#e8584f', '#f6e7c8', '#f2c14e', '#f3b0c8', '#b9a2f0'] }));
     group.add(...flowerMeshes({ spots: wild, terrain: T, seed: 9, size: 0.55, palette: ['#ffffff', '#fff3b0', '#f6e7c8', '#e9d8ff'] }));
+    if (meadow.length) group.add(...flowerMeshes({ spots: meadow, terrain: T, seed: 13, size: 0.8, palette: ['#f2a541', '#f6c75a', '#ef8f3c', '#f08aa0', '#fff3b0', '#e8584f'] }));
     this.#buildVisitor();
     this.#labelsForPlaces();
   }
@@ -583,7 +677,8 @@ export class GroveScene {
   #effects(S) {
     this.fx = new Effects({ scene: this.scene, atlas: this.tex.atlas, max: HIGH.particles });
     this.ambientCount = 180;
-    this.ambient = buildAmbient({ scene: this.scene, count: this.ambientCount, bounds: ISLAND - 2, groundY: this.groundY });
+    // dust motes and fireflies in a box that travels with the visitor, as dense as on the old island
+    this.ambient = buildAmbient({ scene: this.scene, count: this.ambientCount, bounds: 24, follow: true });
     this.fxTimers = { leaf: 0, eat: 0, splash: 0, nut: 0, step: 0 };
     // butterflies: two wings each, flapping, drifting around the flowers and the clearing
     this.butterflies = [];
@@ -598,7 +693,7 @@ export class GroveScene {
       b.scale.x = -1;
       group.add(a, b);
       this.scene.add(group);
-      const around = i % 2 ? this.places.flowers : this.places.clearing;
+      const around = [this.places.clearing, this.places.flowers, this.places.sunrise_meadow ?? this.places.flowers][i % 3];
       this.butterflies.push({ group, wings: [a, b], cx: around.x + (i - 3) * 0.6, cz: around.z, ph: i * 1.9, sp: 0.3 + (i % 3) * 0.08 });
     }
   }
@@ -668,21 +763,24 @@ export class GroveScene {
   }
 
   // --- following the server ------------------------------------------------------------
-  // A straight walk, bent around the pond when it would cross it.
+  // A straight walk, bent around the pond (and any pool) when it would cross it.
   route(from, to) {
-    const c = this.places.pond;
-    const R = SHORE_R;
     const dx = to.x - from.x;
     const dz = to.z - from.z;
     const len2 = dx * dx + dz * dz || 1;
-    const u = Math.max(0, Math.min(1, ((c.x - from.x) * dx + (c.z - from.z) * dz) / len2));
-    const px = from.x + dx * u - c.x;
-    const pz = from.z + dz * u - c.z;
-    const d = Math.hypot(px, pz);
-    if (d > R + 0.6 || u <= 0 || u >= 1) return [];
-    const nx = d > 0.01 ? px / d : -dz / Math.sqrt(len2);
-    const nz = d > 0.01 ? pz / d : dx / Math.sqrt(len2);
-    return [{ x: c.x + nx * (R + 1.3), z: c.z + nz * (R + 1.3), y: 0 }];
+    const out = [];
+    for (const c of this.terrain.pools) {
+      const R = c.shore;
+      const u = Math.max(0, Math.min(1, ((c.x - from.x) * dx + (c.z - from.z) * dz) / len2));
+      const px = from.x + dx * u - c.x;
+      const pz = from.z + dz * u - c.z;
+      const d = Math.hypot(px, pz);
+      if (d > R + 0.6 || u <= 0 || u >= 1) continue;
+      const nx = d > 0.01 ? px / d : -dz / Math.sqrt(len2);
+      const nz = d > 0.01 ? pz / d : dx / Math.sqrt(len2);
+      out.push({ u, p: { x: c.x + nx * (R + 1.3), z: c.z + nz * (R + 1.3), y: 0 } });
+    }
+    return out.sort((a, b) => a.u - b.u).map((o) => o.p);
   }
 
   // The way to walk: over a bridge when it leads to or from new land, and around the pond.
@@ -904,8 +1002,14 @@ export class GroveScene {
     kd.y += Math.sin(Math.PI * moonW) * 0.7;
     kd.y = Math.max(kd.y, 0.16);
     kd.normalize();
-    this.sun.position.copy(kd).multiplyScalar(90);
-    this.sun.target.position.set(0, 0, 0);
+    // the shadow follows the visitor, snapped to whole shadow-map texels so it does not shimmer
+    const vp = this.visitor.root.position;
+    const texel = (2 * SHADOW_HALF) / this.sun.shadow.mapSize.x;
+    const snap = (v) => Math.round(v / (texel * 4)) * texel * 4;
+    const cx = snap(vp.x);
+    const cz = snap(vp.z);
+    this.sun.target.position.set(cx, 0, cz);
+    this.sun.position.copy(kd).multiplyScalar(110).add(this.sun.target.position);
     const warm = 1 - smooth(0.0, 0.2, el);
     const sunCol = new THREE.Color().setRGB(1, lerp(0.96, 0.62, warm), lerp(0.88, 0.38, warm));
     const sunI = 4.2 * smooth(-0.02, 0.24, el) + 0.35 * smooth(-0.1, 0.0, el);
@@ -917,12 +1021,13 @@ export class GroveScene {
     this.fill.intensity = 0.05 + 0.85 * day;
     this.fill.color.setRGB(...pal.top.map((v) => 0.8 + v * 0.2), THREE.SRGBColorSpace);
     this.scene.fog.color.setRGB(...pal.bottom, THREE.SRGBColorSpace);
-    this.scene.fog.density = 0.0066 + pal.night * 0.0016;
+    this.scene.fog.density = FOG + pal.night * FOG_NIGHT;
     this.renderer.toneMappingExposure = 0.9 + 0.38 * day;
     this.shroomMat.emissiveIntensity = pal.night * 2.2;
     this.lanternLight.intensity = pal.night * 8;
     this.lanternGlass.material.emissiveIntensity = 0.5 + pal.night * 4.5; // bright enough to bloom
     this.ambient.u.uTime.value = t;
+    this.ambient.u.uCenter.value.set(vp.x, this.groundY(vp.x, vp.z), vp.z);
     this.ambient.u.uNight.value = pal.night;
     this.ambient.u.uDay.value = day * smooth(0.0, 0.25, el);
     // golden hour: low warm sun, the air full of glinting dust
@@ -973,7 +1078,7 @@ export class GroveScene {
     const len = Math.hypot(mx, mz);
     const before = { x: p.x, z: p.z };
     if (len > 0) {
-      const speed = (this.keys.has('shift') ? 6 : 3.4) * dt;
+      const speed = (this.keys.has('shift') ? VISITOR_RUN : VISITOR_WALK) * dt;
       p.x += (mx / len) * speed;
       p.z += (mz / len) * speed;
       const want = Math.atan2(mx, mz);
@@ -1000,8 +1105,7 @@ export class GroveScene {
         p.z = cz + (dz / d) * rad;
       }
     };
-    const pond = this.places.pond;
-    pushOut(pond.x, pond.z, SHORE_R + 0.2);
+    for (const w of this.terrain.pools) pushOut(w.x, w.z, w.shore + 0.2);
     for (const id of Object.keys(this.trees ?? {})) pushOut(this.places[id].x, this.places[id].z, 0.95);
     const moved = Math.hypot(p.x - before.x, p.z - before.z);
     v.walk += moved * 3;
@@ -1110,6 +1214,7 @@ export class GroveScene {
     b.rotation.x += dt * (players.length ? 6 : 0.2);
     for (const r of this.ripples) if (r.z < 1) r.z = Math.min(1, r.z + dt * 0.7);
     animatePond(this.props, t, this.terrain);
+    animateLandmarks(this.landmarks, t);
   }
 
   #life(dt, t) {
@@ -1169,7 +1274,7 @@ export class GroveScene {
     // place labels fade with distance, so the view is not buried in text
     this.placeLabels.forEach(({ el, p }) => {
       const d = this.camera.position.distanceTo(p);
-      el.style.opacity = String(Math.max(0, Math.min(0.85, (46 - d) / 22)));
+      el.style.opacity = String(Math.max(0, Math.min(0.85, (90 - d) / 40)));
     });
   }
 }

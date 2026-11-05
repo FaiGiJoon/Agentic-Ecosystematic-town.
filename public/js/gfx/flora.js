@@ -7,7 +7,7 @@ import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometr
 import { fbm, ridged, rng } from './noise.js';
 import { applyWind } from './materials.js';
 import { tube } from './terrain.js';
-import { ISLAND, WATER_Y } from './terrain-math.js';
+import { ISLAND, WATER_Y, GROVE_R } from './terrain-math.js';
 
 const TAU = Math.PI * 2;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -82,19 +82,22 @@ export function buildGrass({ terrain, capacity, seed = 12 }) {
   const c = new THREE.Color();
   const pond = terrain.pond;
   let n = 0;
+  // Denser where the grove is, sparser far out: most clumps fall within GROVE_R of the centre.
+  // Instances are drawn in order and the tier draws only the first `count`, so the mix holds on every tier.
+  const wet = (x, z, m) => (terrain.wet ? terrain.wet(x, z, m) : terrain.height(x, z) < WATER_Y + m);
   while (n < capacity) {
     const a = r() * TAU;
-    const d = Math.sqrt(r()) * (ISLAND - 1.3);
+    const d = Math.sqrt(r()) * (r() < 0.7 ? GROVE_R : ISLAND - 1.3);
     const cx = Math.cos(a) * d;
     const cz = Math.sin(a) * d;
-    if (terrain.pathMask(cx, cz) > 0.4 || terrain.height(cx, cz) < WATER_Y + 0.04) continue;
+    if (terrain.pathMask(cx, cz) > 0.4 || wet(cx, cz, 0.04) || (terrain.sandMask?.(cx, cz) ?? 0) > 0.35) continue;
     const moist = Math.max(0, 1 - Math.hypot(cx - pond.x, cz - pond.z) / 12); // lusher near the pond
     const clump = 6 + Math.floor(r() * 9);
     const base = c.setHSL(0.235 + r() * 0.05 - moist * 0.015, 0.28 + r() * 0.16, 0.36 + r() * 0.12 + moist * 0.03).clone();
     for (let k = 0; k < clump && n < capacity; k++) {
       const x = cx + (r() - 0.5) * 0.8;
       const z = cz + (r() - 0.5) * 0.8;
-      if (terrain.pathMask(x, z) > 0.55 || terrain.height(x, z) < WATER_Y + 0.03) continue;
+      if (terrain.pathMask(x, z) > 0.55 || wet(x, z, 0.03)) continue;
       const hgt = (0.26 + r() * 0.42) * (0.8 + 0.4 * Math.sin(x * 0.4) * Math.cos(z * 0.35));
       e.set((r() - 0.5) * 0.4, r() * TAU, (r() - 0.5) * 0.4);
       q.setFromEuler(e);
@@ -273,14 +276,16 @@ export function eucalypt({ seed, height = 7, trunkR = 0.58, lean = 0.4, branches
 }
 
 // Instanced trees from one eucalypt shape. instances: [{ x, y, z, yaw, scale, bark: Color, leaf: Color }].
-export function treeMeshes({ shape, instances, mats, barkMat, leafFactor = 1, castLeaves = true }) {
+// cull: let three skip the whole batch when its bounds (all its trees) are out of view, which
+// pays off when the batch is one patch of the island rather than trees spread all over it.
+export function treeMeshes({ shape, instances, mats, barkMat, leafFactor = 1, castLeaves = true, cull = false }) {
   const group = new THREE.Group();
   const n = instances.length;
   const mk = (geo, mat) => {
     const m = new THREE.InstancedMesh(geo, mat, n);
     m.castShadow = true;
     m.receiveShadow = true;
-    m.frustumCulled = false;
+    m.frustumCulled = cull;
     return m;
   };
   const bark = mk(shape.bark, barkMat);
@@ -303,6 +308,10 @@ export function treeMeshes({ shape, instances, mats, barkMat, leafFactor = 1, ca
   for (const mesh of [bark, leaves, mass]) {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor.needsUpdate = true;
+    if (cull) {
+      mesh.computeBoundingSphere();
+      mesh.boundingSphere.radius += 1.5; // room for the wind to sway the crowns
+    }
   }
   group.add(bark, leaves, mass);
   group.userData = { leaves, setLeafFactor: (f) => leaves.geometry.setDrawRange(0, Math.max(6, Math.floor((shape.cards * f) | 0) * 6)) };

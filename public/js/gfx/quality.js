@@ -5,22 +5,24 @@
 export const TIERS = ['low', 'medium', 'high'];
 
 // Everything a tier controls. Geometry is always built at the high capacity and drawn
-// with a smaller `count`, so changing tier at run time never rebuilds anything.
+// with a smaller `count`, so changing tier at run time never rebuilds anything. The island is
+// 107 m across its radius: terrainRings/Segs give the lawn about a metre per ring, and splatSize
+// (the worn-path, sand and shade map over the whole island) about 0.2 to 0.4 m per texel.
 export const SETTINGS = {
   low: {
     dprMax: 1.25, shadowMap: 1024, msaa: 0, bloom: false, grade: false, ao: false, sharpen: 0,
     grass: 3500, leaves: 0.4, shells: 0, forest: 0.35, particles: 160, butterflies: 0, texSize: 256,
-    terrainRings: 40, terrainSegs: 96, skyOctaves: 3, envSize: 64, stars: 1200, islets: 2,
+    terrainRings: 110, terrainSegs: 192, splatSize: 512, skyOctaves: 3, envSize: 64, stars: 1200, islets: 2,
   },
   medium: {
     dprMax: 1.6, shadowMap: 2048, msaa: 4, bloom: true, grade: true, ao: false, sharpen: 0.25,
     grass: 9000, leaves: 0.7, shells: 3, forest: 0.7, particles: 320, butterflies: 3, texSize: 384,
-    terrainRings: 56, terrainSegs: 128, skyOctaves: 4, envSize: 128, stars: 3500, islets: 4,
+    terrainRings: 150, terrainSegs: 256, splatSize: 768, skyOctaves: 4, envSize: 128, stars: 3500, islets: 4,
   },
   high: {
     dprMax: 2, shadowMap: 4096, msaa: 4, bloom: true, grade: true, ao: true, sharpen: 0.35,
     grass: 18000, leaves: 1, shells: 6, forest: 1, particles: 600, butterflies: 6, texSize: 512,
-    terrainRings: 72, terrainSegs: 176, skyOctaves: 5, envSize: 256, stars: 7000, islets: 5,
+    terrainRings: 200, terrainSegs: 320, splatSize: 1024, skyOctaves: 5, envSize: 256, stars: 7000, islets: 5,
   },
 };
 

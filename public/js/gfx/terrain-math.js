@@ -13,6 +13,8 @@ export const WATER_Y = 0;
 // Where the bank meets the water: terrain height crosses WATER_Y at about this radius.
 export const SHORE_R = POND_R + 0.5;
 export const POOL_SHORE_R = POOL_R + 0.5;
+// The old grove, spread out: the heart of the island, where the scatter is densest.
+export const GROVE_R = 42;
 // How far out the beach of the Sandy Cove reaches.
 const SAND_R = 10;
 
@@ -135,7 +137,14 @@ export function makeTerrain(places, { clear = [], roads = [] } = {}) {
     return false;
   }
 
-  return { height, pathMask, sandMask, blocked, pools, falls, ISLAND, POND_R, SHORE_R };
+  // True if this is under open water (in the pond or a pool, below the waterline + m). The lawn
+  // dips under WATER_Y in places far from any water; that is dry ground.
+  function wet(x, z, m = 0.04) {
+    for (const p of pools) if (Math.hypot(x - p.x, z - p.z) < p.shore + 2 && height(x, z) < WATER_Y + m) return true;
+    return false;
+  }
+
+  return { height, pathMask, sandMask, blocked, wet, pools, falls, ISLAND, POND_R, SHORE_R };
 }
 
 // Where the bushland extras stand, the same every time for a seed: four paperbarks (Melaleuca,

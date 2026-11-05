@@ -329,3 +329,196 @@ export function buildMounds({ spots, terrain, tex }) {
   });
   return shadowy(g);
 }
+
+// A soft round puff, for mist and spray (drawn once into a small canvas).
+function puffTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// Falling water: soft vertical streaks that scroll down.
+function streakTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(220,238,245,0.55)';
+  g.fillRect(0, 0, 64, 128);
+  const r = rng(77);
+  for (let i = 0; i < 70; i++) {
+    g.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.6})`;
+    g.fillRect(Math.floor(r() * 64), Math.floor(r() * 128), 1 + Math.floor(r() * 3), 8 + Math.floor(r() * 40));
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// The new land's landmarks: Misty Hill's tor with mist about it, the waterfall over its rock
+// shelf into the pool, mossy stones in Fern Gully, and driftwood on the Sandy Cove beach.
+// Returns the group, ground-occlusion blobs, and what animateLandmarks moves.
+export function buildLandmarks({ places, terrain, tex, rand }) {
+  const out = { group: new THREE.Group(), blobs: [], rockSpots: [], mist: [], sheets: [] };
+  const H = (x, z) => terrain.height(x, z);
+  const rocks = [1, 2, 3, 4].map((s) => rockGeometry(s * 11 + 3));
+  const rockMat = rockMaterial(tex);
+  const grey = ['#bdb7ad', '#a9a39a', '#c9c2b6', '#9d978d'].map((c) => new THREE.Color(c));
+  const stone = (x, z, k, y = 0, col = grey[Math.floor(rand() * grey.length)]) => {
+    const m = new THREE.Mesh(rocks[Math.floor(rand() * rocks.length)], rockMat.clone());
+    m.material.color = col;
+    m.position.set(x, H(x, z) + y + k * 0.2, z);
+    m.scale.set(k * 1.15, k * 0.85, k);
+    m.rotation.set((rand() - 0.5) * 0.3, rand() * TAU, (rand() - 0.5) * 0.3);
+    out.group.add(m);
+    out.blobs.push({ x, z, r: k * 2.2 + 0.3, s: 0.5 });
+    return m;
+  };
+
+  // --- Misty Hill: a tor of grey stones beside the top, boulders down the slopes, mist ---
+  const misty = places.misty_hill;
+  if (misty) {
+    const tor = [[2.6, 1.4, 1.9, 0], [3.8, -0.4, 1.4, 0], [2.9, 0.4, 1.1, 1.6], [1.6, 2.8, 1.0, 0], [4.4, 1.6, 0.8, 0]];
+    for (const [dx, dz, k, y] of tor) stone(misty.x + dx, misty.z + dz, k, y);
+    for (let i = 0, n = 0; i < 200 && n < 16; i++) {
+      const a = rand() * TAU;
+      const d = 6 + rand() * 10;
+      const x = misty.x + Math.cos(a) * d;
+      const z = misty.z + Math.sin(a) * d;
+      if (terrain.blocked(x, z, 0.3)) continue;
+      stone(x, z, 0.3 + rand() * 0.6);
+      n++;
+    }
+    const puff = puffTexture();
+    for (let i = 0; i < 9; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: '#eef3f6', transparent: true, opacity: 0.2, depthWrite: false }));
+      const a = (i / 9) * TAU;
+      const d = 5 + rand() * 7;
+      const k = 9 + rand() * 7;
+      s.scale.set(k, k * 0.45, 1);
+      s.userData = { cx: misty.x + Math.cos(a) * d, cz: misty.z + Math.sin(a) * d, y: H(misty.x, misty.z) + 0.6 + rand() * 1.6, ph: rand() * TAU };
+      s.position.set(s.userData.cx, s.userData.y, s.userData.cz);
+      out.group.add(s);
+      out.mist.push(s);
+    }
+  }
+
+  // --- Waterfall Pool: a rock shelf behind the pool, a sheet of falling water, spray ---
+  for (const f of terrain.falls ?? []) {
+    const side = { x: -f.uz, z: f.ux };
+    const top = H(f.x, f.z) + 2.6;
+    // the shelf: big stones in a curve behind the pool, stacked toward the middle
+    for (let i = -3; i <= 3; i++) {
+      const w = Math.abs(i);
+      const x = f.x + side.x * i * 1.25 + f.ux * (0.6 + w * 0.15);
+      const z = f.z + side.z * i * 1.25 + f.uz * (0.6 + w * 0.15);
+      stone(x, z, 1.5 - w * 0.12, 0);
+      if (w < 3) stone(x + f.ux * 0.5, z + f.uz * 0.5, 1.2 - w * 0.15, 1.3 - w * 0.25);
+    }
+    stone(f.x + side.x * 0.9 + f.ux * 1.4, f.z + side.z * 0.9 + f.uz * 1.4, 1.1, 2.0);
+    stone(f.x - side.x * 0.9 + f.ux * 1.4, f.z - side.z * 0.9 + f.uz * 1.4, 1.0, 2.1);
+    // the falling water, a curtain from the lip of the shelf into the pool
+    const map = streakTexture();
+    const h = top - WATER_Y + 0.1;
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(1.5, h, 1, 6), new THREE.MeshStandardMaterial({
+      map, transparent: true, opacity: 0.85, roughness: 0.15, depthWrite: false, side: THREE.DoubleSide, emissive: '#9ec4cf', emissiveIntensity: 0.15,
+    }));
+    const p = sheet.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const t = (p.getY(i) + h / 2) / h; // 0 at the foot, 1 at the lip
+      p.setZ(i, -((1 - t) ** 2) * 0.25 + t * 0.05); // the water bows out a little as it falls
+    }
+    sheet.geometry.computeVertexNormals();
+    sheet.position.set(f.x - f.ux * 0.7, WATER_Y + h / 2 - 0.05, f.z - f.uz * 0.7);
+    sheet.rotation.y = Math.atan2(-f.ux, -f.uz);
+    sheet.renderOrder = 3;
+    out.group.add(sheet);
+    out.sheets.push(sheet);
+    // spray where it lands
+    const puff = puffTexture();
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: '#ffffff', transparent: true, opacity: 0.28, depthWrite: false }));
+      const k = 1.4 + rand() * 1;
+      s.scale.set(k, k * 0.7, 1);
+      s.userData = { cx: f.x - f.ux * 1.1 + side.x * (rand() - 0.5) * 1.2, cz: f.z - f.uz * 1.1 + side.z * (rand() - 0.5) * 1.2, y: WATER_Y + 0.35, ph: rand() * TAU, spray: true };
+      s.position.set(s.userData.cx, s.userData.y, s.userData.cz);
+      out.group.add(s);
+      out.mist.push(s);
+    }
+  }
+
+  // --- Fern Gully: mossy stones about the damp floor ---
+  const gully = places.fern_gully;
+  if (gully) {
+    const moss = ['#7d8a62', '#6f7d58', '#8a9470'].map((c) => new THREE.Color(c));
+    for (let i = 0, n = 0; i < 200 && n < 10; i++) {
+      const a = rand() * TAU;
+      const d = 2.5 + rand() * 6;
+      const x = gully.x + Math.cos(a) * d;
+      const z = gully.z + Math.sin(a) * d;
+      if (terrain.blocked(x, z, 0.2)) continue;
+      stone(x, z, 0.3 + rand() * 0.45, 0, moss[n % moss.length]);
+      n++;
+    }
+  }
+
+  // --- Sandy Cove: bleached driftwood and a few shells on the sand ---
+  const cove = places.sandy_cove;
+  if (cove) {
+    const drift = new THREE.MeshStandardMaterial({ map: tex.bark.map, normalMap: tex.bark.normal, color: '#d9cdb8', roughness: 0.95 });
+    for (let i = 0; i < 4; i++) {
+      const a = 0.7 + i * 1.6 + rand() * 0.5;
+      const d = 3 + rand() * 4;
+      const x = cove.x + Math.cos(a) * d;
+      const z = cove.z + Math.sin(a) * d;
+      const len = 1.6 + rand() * 1.6;
+      const log = new THREE.Mesh(cyl(0.12 + rand() * 0.08, 0.16 + rand() * 0.08, len, 8), drift);
+      log.rotation.set(Math.PI / 2, 0, rand() * TAU);
+      log.position.set(x, H(x, z) + 0.12, z);
+      out.group.add(log);
+      out.blobs.push({ x, z, r: len * 0.6, s: 0.35 });
+    }
+    const shellMat = new THREE.MeshStandardMaterial({ color: '#f3e6dc', roughness: 0.5 });
+    const shells = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 4, 0, TAU, 0, Math.PI / 2), shellMat, 24);
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    for (let i = 0; i < 24; i++) {
+      const a = rand() * TAU;
+      const d = Math.sqrt(rand()) * 7;
+      const x = cove.x + Math.cos(a) * d;
+      const z = cove.z + Math.sin(a) * d;
+      q.setFromEuler(new THREE.Euler(0, rand() * TAU, 0));
+      const k = 0.7 + rand() * 0.8;
+      m4.compose(V(x, H(x, z) - 0.01, z), q, V(k, k * 0.6, k * 1.2));
+      shells.setMatrixAt(i, m4);
+    }
+    out.group.add(shells);
+  }
+  shadowy(out.group);
+  for (const s of [...out.mist, ...out.sheets]) s.castShadow = false;
+  return out;
+}
+
+// Mist drifts on Misty Hill, spray puffs at the waterfall's foot, the falling water flows.
+export function animateLandmarks(lm, t) {
+  for (const s of lm.mist) {
+    const u = s.userData;
+    if (u.spray) {
+      s.position.y = u.y + Math.abs(Math.sin(t * 1.7 + u.ph)) * 0.4;
+      s.material.opacity = 0.18 + 0.12 * Math.sin(t * 2.3 + u.ph);
+    } else {
+      s.position.set(u.cx + Math.sin(t * 0.05 + u.ph) * 3, u.y + Math.sin(t * 0.13 + u.ph) * 0.3, u.cz + Math.cos(t * 0.04 + u.ph) * 3);
+    }
+  }
+  for (const s of lm.sheets) s.material.map.offset.y = (t * 1.1) % 1;
+}

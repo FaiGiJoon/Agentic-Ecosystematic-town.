@@ -95,6 +95,9 @@ export function groundMaterial({ tex, splat, island }) {
           float macro = texture2D(uMacro, gw * 0.021).r;
           float macro2 = texture2D(uMacro, gw * 0.083 + 0.37).r;
           diffuseColor.rgb = mix(diffuseColor.rgb, dirtC, sp.r);
+          // the beach of the Sandy Cove: pale sand, a little grain from the dirt texture
+          vec3 sandC = vec3(0.74, 0.6, 0.33) * mix(0.9, 1.08, dot(dirtC, vec3(0.333)) * 1.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, sandC, smoothstep(0.05, 0.6, sp.g));
           diffuseColor.rgb *= mix(0.88, 1.12, macro) * mix(0.95, 1.05, macro2);
           // dry patches and lush patches, so the lawn is never one green
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.18, 1.05, 0.72), smoothstep(0.62, 0.9, macro2) * (1.0 - sp.r) * 0.6);
