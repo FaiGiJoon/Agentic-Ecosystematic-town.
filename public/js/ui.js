@@ -10,9 +10,9 @@ const ICON = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></
 const ITEM_ICON = { leaf: 'i-leaf', blossom: 'i-blossom', pebble: 'i-pebble', ball: 'i-ball', feather: 'i-feather' };
 const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
-  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
+  approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', read: 'reading a book', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow' };
+const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow', wish: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -24,9 +24,12 @@ export function createUI({ scene, api }) {
   const name = (id) => state?.koalas.find((k) => k.id === id)?.name ?? id;
 
   // --- top bar -------------------------------------------------------------------------
+  const intro = $('#intro');
   const playBtn = $('#play');
   playBtn.addEventListener('click', async () => {
     if (!state || busy) return;
+    introDismissed = true; // pressing Play is answer enough for the welcome card
+    intro.hidden = true;
     busy = true;
     playBtn.disabled = true;
     try {
@@ -238,7 +241,6 @@ export function createUI({ scene, api }) {
   scene.onPick = (id) => select(id);
 
   // --- intro ---------------------------------------------------------------------------
-  const intro = $('#intro');
   $('#intro-play').addEventListener('click', async () => {
     introDismissed = true;
     intro.hidden = true;
@@ -310,6 +312,10 @@ export function createUI({ scene, api }) {
         <div class="holds">${growthLine(k)}</div>
         <div class="opinion">${k.opinion ? `On ${esc(friend(k).name)}: “${esc(k.opinion)}”` : `No opinion of ${esc(friend(k).name)} yet.`}</div>
         <div class="holds">Holding: ${k.inventory.length ? k.inventory.map(esc).join(', ') : 'nothing'}</div>
+        <div class="holds">${k.wish ? `Wish: “${esc(k.wish)}”` : 'No wish yet.'}</div>
+        <details><summary>Learned (${(k.learned ?? []).length})</summary>
+          <ul>${(k.learned ?? []).map((m) => `<li>${esc(m)}</li>`).join('') || '<li class="muted">Nothing yet. Koalas learn at the library.</li>'}</ul>
+        </details>
         <details ${k.memories.length ? 'open' : ''}><summary>Remembers (${k.memories.length})</summary>
           <ul>${k.memories.map((m) => `<li>${esc(m)}</li>`).join('') || '<li class="muted">Nothing yet. Memories form as the koalas live.</li>'}</ul>
         </details>
@@ -330,7 +336,8 @@ export function createUI({ scene, api }) {
     const who = (b) => b.helpers.map(name).join(' and ');
     const card = (b) => `
       <div class="bcard${b.done ? ' done' : ''}">
-        <div class="bhead"><b>${esc(b.title)}</b><span>${esc(state.blueprints?.[b.kind]?.name ?? b.kind)}</span></div>
+        <div class="bhead"><b>${esc(b.title)}</b><span>${esc(b.kind === 'custom' ? 'Own invention' : state.blueprints?.[b.kind]?.name ?? b.kind)}</span></div>
+        ${b.kind === 'custom' && b.spec?.design ? `<div class="bmeta">${esc(b.spec.design)}</div>` : ''}
         ${b.done ? '' : `<div class="bar"><i style="width:${Math.round((b.progress / b.effort) * 100)}%;background:var(--warm)"></i></div>`}
         <div class="bmeta">${b.done ? 'Built' : `${b.progress} of ${b.effort} steps`} by ${esc(who(b))}, at the ${esc(state.places[b.plot]?.name ?? b.plot)}</div>
       </div>`;
@@ -352,7 +359,7 @@ export function createUI({ scene, api }) {
       <p class="lastcall">${risen.length ? `New land so far: ${risen.map((l) => esc(l.name)).join(', ')}.` : 'Just the island for now.'}
         ${next ? `${esc(next.name)} rises from the water after ${toNext} more finished build${toNext === 1 ? '' : 's'}.` : 'All the new land has risen.'}</p>
       <h3>What things cost</h3>
-      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}</div>`;
+      <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}${['small', 'medium', 'big'].map((size) => `<div><b>Your own invention — ${size}</b><span>${esc(cost(state.customCosts?.[size]?.cost))}</span></div>`).join('')}</div>`;
   }
 
   // Tickets the koalas wrote for you, with a reply box and a close button each.

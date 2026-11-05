@@ -69,6 +69,27 @@ export function researchArgs({ prompt, model, callUsd }) {
   ];
 }
 
+// Reading: a koala opens a picture book at a topic. No tools; the book answers from what it knows.
+export const READ_SYSTEM = "You are a picture book in the koala grove's library. The koala opens you at a topic; "
+  + 'tell one true, simple, interesting thing about it, and maybe an idea for the grove.';
+
+export function readArgs({ prompt, model, callUsd }) {
+  return [
+    '-p', prompt,
+    '--output-format', 'json',
+    '--model', model,
+    '--system-prompt', READ_SYSTEM,
+    '--json-schema', JSON.stringify(RESEARCH_SCHEMA),
+    '--tools', '',
+    '--setting-sources', '',
+    '--strict-mcp-config',
+    '--disable-slash-commands',
+    '--permission-mode', 'dontAsk',
+    '--no-session-persistence',
+    '--max-budget-usd', String(callUsd),
+  ];
+}
+
 // The result message: all of stdout as one JSON object, or else the last line that is one.
 function resultFrom(stdout) {
   const tryParse = (s) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   KOALAS, PLACES, ITEMS, ACTIONS, MOODS, DECISION_SCHEMA,
   newKoala, parseDecision, applyDecision, drift, groveClock, buildPrompt, systemPrompt,
-  growthOf, carryLimit, STAGES, START_STRENGTH,
+  growthOf, carryLimit, canReadAt, STAGES, START_STRENGTH,
 } from '../hq/grove-world.js';
 
 const world = () => ({ koalas: Object.fromEntries(KOALAS.map((k) => [k.id, newKoala(k.id)])) });
@@ -298,4 +298,75 @@ test('review: a gift to a friend with full paws stays with the giver', () => {
   assert.equal(w.koalas.crystal.activity, 'sit');
   assert.match(w.koalas.crystal.recent.join(' '), /paws are full/);
   assert.doesNotMatch(w.koalas.ruby.recent.join(' '), /gave you/);
+});
+
+test('read: a topic, capped at 80 characters; empty sits', () => {
+  assert.ok(ACTIONS.includes('read'));
+  const k = newKoala('crystal');
+  assert.equal(parseDecision({ action: 'read', target: 'x'.repeat(200) }, k).target.length, 80);
+  assert.equal(parseDecision({ action: 'read', target: '  ' }, k).action, 'sit');
+});
+
+test('canReadAt: Library Isle and finished book-ish builds only', () => {
+  const w = world();
+  w.builds = [
+    { id: 1, kind: 'reading_nook', title: 'Nook', plot: 'plot_a', done: true },
+    { id: 2, kind: 'custom', title: 'Story Hut', plot: 'plot_b', done: true },
+    { id: 3, kind: 'custom', title: 'x', spec: { design: 'a shelf of books' }, plot: 'plot_c', done: true },
+    { id: 4, kind: 'reading_nook', title: 'Unfinished', plot: 'plot_d', done: false },
+    { id: 5, kind: 'bench', title: 'Bench', plot: 'plot_e', done: true },
+  ];
+  assert.ok(canReadAt(w, 'library_isle'));
+  for (const p of ['plot_a', 'plot_b', 'plot_c']) assert.ok(canReadAt(w, p), p);
+  for (const p of ['plot_d', 'plot_e', 'pond']) assert.ok(!canReadAt(w, p), p);
+});
+
+test('read: costs energy like play, is described, and the prompt offers it and lists what was learned', () => {
+  const w = world();
+  const k = w.koalas.crystal;
+  k.place = 'library_isle';
+  k.learned = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const before = k.energy;
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'read', target: 'frogs' }, k));
+  assert.ok(k.energy < before);
+  assert.match(log[0].text, /opened a book about "frogs"/);
+  const p = buildPrompt(w, 'crystal', { label: 'Mon 10:00', phase: 'morning' });
+  assert.match(p, /The library is on Library Isle \(library_isle\), across the bridge from the grove/);
+  assert.match(p, /read \(target: a topic/);
+  assert.match(p, /research \(target/);
+  assert.match(p, /Things you learned:\n- c\n- d\n- e\n- f\n- g/);
+  w.koalas.ruby.place = 'pond';
+  assert.doesNotMatch(buildPrompt(w, 'ruby', { label: 'x', phase: 'y' }), /read \(target/);
+});
+
+test('founders have their own interests; the system prompt names them and the wish field', () => {
+  const crystal = KOALAS.find((k) => k.id === 'crystal');
+  const ruby = KOALAS.find((k) => k.id === 'ruby');
+  assert.deepEqual(crystal.interests, ['brave explorers', 'shiny stones and crystals', 'stars', 'faraway places']);
+  assert.deepEqual(ruby.interests, ['sleepy animals', 'eucalyptus and plants', 'poems', 'the moon and night']);
+  const sys = systemPrompt('crystal', world());
+  assert.match(sys, /You have your own mind and your own life\. You are curious about: brave explorers, shiny stones and crystals, stars, faraway places\./);
+  assert.match(sys, /Follow your curiosity: visit the library to read or look things up, then talk about what you learned and let it inspire what you build\./);
+  assert.match(sys, /wish/);
+  const w = world();
+  w.koalas.pip = { ...newKoala('crystal'), id: 'pip', name: 'Pip', gender: 'girl', persona: 'Pip is small.', interests: ['frogs', 'mud'], parents: ['crystal', 'ruby'] };
+  assert.match(systemPrompt('pip', w), /curious about: frogs, mud\./);
+});
+
+test('wish is a required schema field, stored when non-empty, kept when empty, and shown in the prompt', () => {
+  assert.ok(DECISION_SCHEMA.required.includes('wish'));
+  assert.equal(DECISION_SCHEMA.properties.wish.type, 'string');
+  const w = world();
+  const m = w.koalas.crystal;
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /You have no wish yet\./);
+  const log = applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: 'Build a tower to touch the stars' }, m));
+  assert.equal(m.wish, 'Build a tower to touch the stars');
+  assert.ok(log.some((e) => e.kind === 'wish' && e.text === 'Crystal wishes: Build a tower to touch the stars'));
+  assert.equal(log[0].kind, 'act');
+  assert.match(buildPrompt(w, 'crystal', groveClock(0)), /Your wish: "Build a tower to touch the stars"/);
+  const same = applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: 'Build a tower to touch the stars' }, m));
+  assert.ok(!same.some((e) => e.kind === 'wish'));
+  applyDecision(w, 'crystal', parseDecision({ action: 'sit', wish: '' }, m));
+  assert.equal(m.wish, 'Build a tower to touch the stars');
+  assert.equal(parseDecision({ action: 'sit', wish: 'x'.repeat(300) }, m).wish.length, 120);
 });

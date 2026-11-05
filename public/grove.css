@@ -42,7 +42,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 #boot[hidden] { display: none; }
 
 /* ---------- top bar ---------- */
-#topbar { top: calc(12px + env(safe-area-inset-top, 0px)); gap: var(--s-2); align-items: center; }
+#topbar { z-index: 9; top: calc(12px + env(safe-area-inset-top, 0px)); gap: var(--s-2); align-items: center; }
 .brand { padding: 7px 14px 7px 10px; border-radius: var(--r-m); box-shadow: var(--shadow); gap: 10px; }
 .brand .logo { width: 30px; height: 30px; color: var(--mint); background: rgba(159, 211, 176, 0.14); border-radius: 10px; padding: 4px; }
 .brand .title { font: 700 var(--fs-m)/1.15 var(--sans); letter-spacing: 0.01em; }
@@ -209,6 +209,7 @@ h3 { color: var(--muted); }
 .build-label { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 9px; border-radius: 10px; background: rgba(15, 21, 32, 0.72); color: #fff; font: 600 11px var(--sans); white-space: nowrap; pointer-events: none; }
 .build-label .prog { width: 64px; height: 4px; border-radius: 99px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 .build-label .prog i { display: block; height: 100%; background: var(--warm); }
+.build-label[title] { pointer-events: auto; cursor: help; }
 .build-label small { font: 10px var(--mono); color: #d7dee8; }
 .build-label.done { background: rgba(15, 21, 32, 0.55); }
 .build-label.done .prog, .build-label.done small { display: none; }

@@ -370,13 +370,72 @@ test('research at Library Isle: one extra call with web search, the fact remembe
   assert.ok(research[0].args.includes('WebSearch'));
   assert.match(research[0].prompt, /How do koalas find water\?/);
   const crystal = grove.state().koalas.find((k) => k.id === 'crystal');
-  assert.match(crystal.memories.at(-1), /^Koalas get most of their water/);
-  assert.ok(crystal.memories.at(-1).length <= 200);
+  assert.match(crystal.learned.at(-1), /^Koalas get most of their water/);
+  assert.ok(crystal.learned.at(-1).length <= 200);
+  assert.ok(!crystal.memories.some((m) => /their water/.test(m)), 'facts go to learned, not memories');
   assert.match(crystal.recent.join(' '), /We could build a well/);
   assert.equal(grove.state().usage.byKoala.crystal.today.calls, 2, 'the research call is metered too');
   for (let i = 0; i < 3; i++) await openRound(grove, advance, 70000);
   assert.equal(research.length, 3, 'three a day');
   assert.match(grove.state().koalas.find((k) => k.id === 'crystal').recent.join(' '), /library is closed/);
+});
+
+const openLibrary = (grove) => {
+  grove.world.builds = [{ id: 1, kind: 'bridge_library_isle', title: 'Bridge', plot: null, progress: 4, effort: 4, done: true, by: 'crystal', helpers: ['crystal'] }];
+};
+
+test('read at the library: one extra call with no tools, fact learned and told to a friend nearby', async () => {
+  const reads = [];
+  const { grove, calls, advance } = setup({
+    config: { readsPerDay: 2 },
+    decide: (k, n) => {
+      const req = calls[n - 1];
+      if (req.kind === 'read') {
+        reads.push(req);
+        return { ok: true, raw: { fact: 'Octopuses have three hearts.', idea: '' }, usage: USAGE };
+      }
+      return { ok: true, raw: k === 'crystal' ? { action: 'read', target: 'octopuses' } : { action: 'sit' }, usage: USAGE };
+    },
+  });
+  openLibrary(grove);
+  grove.world.koalas.crystal.place = 'library_isle';
+  grove.world.koalas.ruby.place = 'library_isle';
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.equal(reads.length, 1);
+  assert.ok(!reads[0].args.includes('WebSearch'));
+  assert.equal(reads[0].args[reads[0].args.indexOf('--tools') + 1], '');
+  assert.equal(reads[0].args[reads[0].args.indexOf('--max-budget-usd') + 1], String(grove.config.readUsd));
+  const s = grove.state();
+  const crystal = s.koalas.find((k) => k.id === 'crystal');
+  assert.deepEqual(crystal.learned, ['Octopuses have three hearts.']);
+  assert.match(crystal.recent.join(' '), /At the library you read: Octopuses have three hearts/);
+  assert.match(s.koalas.find((k) => k.id === 'ruby').recent.join(' '), /Crystal told you: Octopuses have three hearts/);
+  assert.equal(s.usage.byKoala.crystal.today.calls, 2);
+  assert.ok(s.log.some((l) => l.kind === 'learn' && /Crystal read about octopuses: Octopuses/.test(l.text)));
+  await openRound(grove, advance, 70000);
+  await openRound(grove, advance, 70000);
+  assert.equal(reads.length, 2, 'stops at readsPerDay');
+});
+
+test('read away from a book place sits with a note and makes no call', async () => {
+  const { grove, calls, advance } = setup({ decide: () => ({ ok: true, raw: { action: 'read', target: 'frogs' }, usage: USAGE }) });
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.ok(!calls.some((c) => c.kind === 'read'));
+  assert.match(grove.state().koalas[0].recent.join(' '), /read only at the library or somewhere with books/);
+});
+
+test('review: no read call once the daily cap is reached', async () => {
+  const { grove, calls, advance } = setup({
+    config: { dayUsd: 0.001 },
+    decide: () => ({ ok: true, raw: { action: 'read', target: 'frogs' }, usage: USAGE }),
+  });
+  openLibrary(grove);
+  grove.world.koalas.crystal.place = 'library_isle';
+  grove.play();
+  await openRound(grove, advance, 5000);
+  assert.ok(!calls.some((c) => c.kind === 'read'));
 });
 
 test('research anywhere but Library Isle is refused without a call', async () => {

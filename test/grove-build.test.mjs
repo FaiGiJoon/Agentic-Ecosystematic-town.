@@ -127,3 +127,67 @@ test('the prompt tells a koala what it can build, what is underway and what stan
   assert.match(p, /plot_\d/);
   assert.match(p, /together/i);
 });
+
+// ---- build anything ----
+const invent = (w, id, name, design, target = 'new') => applyDecision(w, id, parseDecision({ action: 'build', target, build_name: name, build_design: design }, w.koalas[id], placesOf(w)));
+
+test('the schema asks for build_design, strictly', () => {
+  assert.ok(DECISION_SCHEMA.required.includes('build_design'));
+  assert.equal(DECISION_SCHEMA.properties.build_design.type, 'string');
+});
+
+test('parseDecision: new, or an unknown target with a name or design, means a new invention', () => {
+  const w = world();
+  const k = w.koalas.crystal;
+  const p = (o) => parseDecision({ action: 'build', ...o }, k, placesOf(w));
+  assert.equal(p({ target: 'new', build_name: 'Arcade' }).target, 'new');
+  assert.equal(p({ target: 'castle', build_design: 'a castle' }).target, 'new');
+  assert.equal(p({ target: 'castle', build_name: 'Castle' }).target, 'new');
+  assert.equal(p({ target: 'castle' }).target, '');
+  assert.equal(p({ target: '', build_name: 'Arcade' }).target, '');
+  assert.equal(p({ target: 'bench', build_design: 'x' }).target, 'bench');
+  assert.equal(p({ target: 'new', build_design: 'd'.repeat(300) }).buildDesign.length, 160);
+});
+
+test('inventing spends the cost, makes a custom build that progresses and finishes', () => {
+  const w = world();
+  w.stock = { wood: 5, stone: 5 };
+  invent(w, 'crystal', 'Arcade', 'An arcade machine with pink buttons.');
+  const b = w.builds[0];
+  assert.deepEqual([b.kind, b.title, b.done, b.by, b.progress], ['custom', 'Arcade', false, 'crystal', 1]);
+  assert.deepEqual([b.spec.shape, b.spec.size, b.spec.colors], ['machine', 'medium', ['pink']]);
+  assert.ok(b.spec.parts.includes('buttons'));
+  assert.equal(b.spec.design, 'An arcade machine with pink buttons.');
+  assert.deepEqual([b.cost, b.effort], [{ wood: 3, stone: 1 }, 4]);
+  assert.deepEqual(w.stock, { wood: 2, stone: 4 });
+  for (let i = 0; i < 3; i++) build(w, 'crystal', '');
+  assert.equal(b.done, true);
+  assert.match(placesOf(w)[b.plot].name, /Arcade/);
+});
+
+test('inventing without enough in the Stockpile spends nothing and leaves a note', () => {
+  const w = world();
+  w.stock = { wood: 1 };
+  invent(w, 'crystal', 'Castle', 'A giant castle.');
+  assert.equal(w.builds.length, 0);
+  assert.deepEqual(w.stock, { wood: 1 });
+  assert.ok(w.koalas.crystal.recent.some((t) => /needs 4 more wood/.test(t)));
+});
+
+test('inventions count toward the 2-at-once limit and asking again joins the same one', () => {
+  const w = world();
+  invent(w, 'crystal', 'Arcade', 'an arcade machine');
+  invent(w, 'crystal', 'Arcade', 'an arcade machine');
+  assert.equal(w.builds.length, 1);
+  invent(w, 'ruby', 'Castle', 'a castle');
+  invent(w, 'ruby', 'Fountain', 'a fountain');
+  assert.equal(w.builds.length, 2);
+});
+
+test('the prompt invites inventing and lists custom builds with their design', () => {
+  const w = world();
+  invent(w, 'crystal', 'Arcade', 'an arcade machine');
+  const p = buildPrompt(w, 'ruby', groveClock(0));
+  assert.match(p, /invent anything/i);
+  assert.match(p, /Arcade \(custom: an arcade machine\)/);
+});

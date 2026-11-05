@@ -36,19 +36,23 @@ function invent() {
   if (carrying) options.push({ action: 'store', target: '', say: pick(['', 'Into the pile it goes!']), mood: 'happy' }, { action: 'store', target: '', say: '', mood: 'content' });
   if (!here && !carrying) options.push({ action: 'move', target: pick(['big_gum', 'river_gum', 'blue_gum', 'lookout', 'pond']), say: '', mood: 'curious' });
   const bridge = /(bridge_\w+) \(Bridge to/.exec(prompt)?.[1];
-  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', say: 'Let us build a bridge!', mood: 'curious' });
+  if (bridge) options.push({ action: 'build', target: bridge, build_name: '', build_design: '', say: 'Let us build a bridge!', mood: 'curious' });
   if (/You can build/.test(prompt)) {
     const underway = /Being built: (?!nothing)/.test(prompt);
     const names = ['Sky Nest', 'Cozy Corner', 'Moon Perch', 'Gumnut Lodge', 'Pebble Path', 'Snack Shack', 'Glow Post'];
-    const build = () => ({ action: 'build', target: pick(['bench', 'lantern', 'flowerbed', 'birdhouse', 'stones', 'hut', 'treehouse', 'tower']), build_name: pick(names), say: pick(['Let us build something!', 'I have an idea!', '']), mood: 'curious' });
-    const keepGoing = () => ({ action: 'build', target: '', build_name: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
+    const designs = [['Game Machine', 'A little arcade machine with pink buttons and a glowing screen.'], ['Moss Castle', 'A tall green castle with a flag.'], ['Footbridge', 'A small wooden footbridge with a bell.'], ['Fountain', 'A blue fountain with a star on top.']];
+    const invention = () => { const [n, dsg] = pick(designs); return { action: 'build', target: 'new', build_name: n, build_design: dsg, say: 'I have a new idea!', mood: 'curious' }; };
+    const build = () => ({ action: 'build', target: pick(['bench', 'lantern', 'flowerbed', 'birdhouse', 'stones', 'hut', 'treehouse', 'tower']), build_name: pick(names), build_design: '', say: pick(['Let us build something!', 'I have an idea!', '']), mood: 'curious' });
+    const keepGoing = () => ({ action: 'build', target: '', build_name: '', build_design: '', say: pick(['Tap tap tap!', 'Almost there!', '']), mood: 'happy' });
     options.push(build(), underway ? keepGoing() : build(), underway ? keepGoing() : build());
+    if (/Or invent anything/.test(prompt)) options.push(invention());
   }
   if (!/Your tickets still waiting/.test(prompt) && Math.random() < 0.3) {
     options.push({ action: 'file_ticket', target: '', say: pick(['We need more stone to build a bridge. Where can we find it?', 'It gets very dark at night. Could we have more lanterns?', 'My paws are always full. How can I carry more?']), mood: 'curious' });
   }
   if (/nest \(with/.test(prompt)) options.push({ action: 'nest', target: '', say: 'Shall we make a cozy nest together?', mood: 'cozy' });
   if (/research \(target/.test(prompt)) options.push({ action: 'research', target: pick(['How do koalas find water?', 'What do turtles eat?', 'How do you build a strong bridge?']), say: 'Let me look that up!', mood: 'curious' });
+  if (/read \(target/.test(prompt)) options.push({ action: 'read', target: pick(['frogs', 'the moon', 'how bridges work', 'octopuses']), say: 'A book!', mood: 'curious' });
   if (hungry) options.push({ action: 'eat', target: pick(['big_gum', 'river_gum', 'blue_gum']), say: 'Munch munch.', mood: 'hungry' });
   if (tired) options.push({ action: 'nap', target: '', say: 'Just a little nap...', mood: 'sleepy' });
   if (heard) options.push({ action: 'sit', target: '', say: pick(['I heard you!', 'Yes, I think so too.', 'Really? Tell me more.']), mood: 'happy' });
@@ -59,12 +63,15 @@ function invent() {
     remember: Math.random() < 0.2 ? `A ${pick(['quiet', 'sunny', 'funny'])} moment at the grove.` : '',
     bond: pick([0, 0, 1, 1, 2, -1]),
     opinion: Math.random() < 0.3 ? pick(['A good friend.', 'A bit noisy, but kind.', 'I like having them around.']) : '',
+    wish: Math.random() < 0.15 ? pick(['Build a tower to touch the stars.', 'Find a frog and make friends.', 'Write a poem about the moon.']) : '',
+    build_name: '',
+    build_design: '',
     ...d,
   };
 }
 
 // A research call (web search is its only tool) answers with a fact and an idea instead of a decision.
-const researching = args.includes('WebSearch');
+const researching = args.includes('WebSearch') || /picture book/.test(system);
 const decision = process.env.FAKE_DECISION ? JSON.parse(process.env.FAKE_DECISION)
   : researching ? { fact: pick(['Koalas get most of the water they need from gum leaves.', 'Turtles can pull their head into their shell to stay safe.', 'A bridge is stronger with ropes on both sides.']), idea: pick(['', 'We could build a well.', 'Let us build stepping stones to the pond.']) }
   : invent();

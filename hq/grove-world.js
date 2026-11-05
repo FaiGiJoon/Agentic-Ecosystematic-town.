@@ -10,6 +10,7 @@ export const KOALAS = [
     outfit: 'a pink scarf',
     color: '#b9c2c9',
     home: 'clearing',
+    interests: ['brave explorers', 'shiny stones and crystals', 'stars', 'faraway places'],
     persona: 'Crystal is a bold and endlessly curious baby koala, a girl (she/her) who wears a pink scarf. '
       + 'Crystal loves exploring every corner of the grove, collects shiny pebbles, splashes at the pond, '
       + 'talks a lot, gets bored quickly and sometimes teases. Crystal secretly wants Ruby to think she is brave.',
@@ -21,6 +22,7 @@ export const KOALAS = [
     outfit: 'a small blue hat',
     color: '#8d8478',
     home: 'hollow',
+    interests: ['sleepy animals', 'eucalyptus and plants', 'poems', 'the moon and night'],
     persona: 'Ruby is a gentle and sleepy baby koala, a boy (he/him) who wears a small blue hat. Ruby adores '
       + 'eucalyptus, long naps in the mossy hollow and quiet company. He speaks softly and a little poetically, '
       + 'is slow to trust, notices small things, and is protective of friends once they have earned it.',
@@ -28,9 +30,10 @@ export const KOALAS = [
 ];
 
 import {
-  RESOURCES, ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
+  RESOURCES, ISLANDS, OPEN_ISLANDS, SOURCES, costOf, stockOf, held, canAfford, spend, add, amounts, bridged, bridgeFoot,
 } from './grove-economy.js';
 import { canNest, nestStep } from './grove-family.js';
+import { designSpec, designCost } from './grove-design.js';
 
 // The koalas used to be called Mallee and Bramble; old groves are renamed on start.
 export const RENAMED = { mallee: 'crystal', bramble: 'ruby' };
@@ -63,7 +66,7 @@ export const SIGHTINGS = [
   'A turtle poked its head out of its shell and blinked at you.',
   'A frog croaked somewhere near the lily pads.',
 ];
-export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'research', 'sit'];
+export const ACTIONS = ['move', 'eat', 'nap', 'play', 'climb', 'approach', 'give', 'gather', 'store', 'build', 'nest', 'file_ticket', 'research', 'read', 'sit'];
 
 // Building. Each build action adds one step of work, two when the friend is building at
 // the same site. A finished build stands at its plot and becomes a place to visit.
@@ -131,12 +134,15 @@ export const DECISION_SCHEMA = {
     bond: { type: 'integer', minimum: -3, maximum: 3, description: 'How this moment changes your feelings about your friend.' },
     opinion: { type: 'string', description: 'One line: what you think of your friend now, or empty to keep it.' },
     build_name: { type: 'string', description: 'When you start building something, a name for it; otherwise empty.' },
+    wish: { type: 'string', description: 'Something you would love to do or make one day, or empty to keep your wish.' },
+    build_design: { type: 'string', description: 'When you start building something new that you invented (target new), one sentence on what it is and what it looks like; otherwise empty.' },
   },
-  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name'],
+  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'build_design'],
   additionalProperties: false,
 };
 
 const byId = (id) => KOALAS.find((k) => k.id === id);
+export const interestsOf = (k) => k?.interests ?? byId(k?.id)?.interests ?? [];
 export const MAX_KOALAS = 4;
 
 // Everyone else in the grove.
@@ -197,6 +203,7 @@ export function newKoala(id) {
     bond: 0,
     opinion: '',
     memories: [],
+    learned: [],
     recent: [],
     thought: '',
     say: '',
@@ -239,6 +246,14 @@ export function placesOf(world) {
   return out;
 }
 
+// Books can be opened at Library Isle and at finished builds that are about reading.
+const BOOKISH = /\b(books?|reading|library|story|stories)\b/i;
+export function canReadAt(world, place) {
+  if (place === 'library_isle') return true;
+  return (world.builds ?? []).some((b) => b.done && siteOf(b) === place
+    && (b.kind === 'reading_nook' || BOOKISH.test(`${b.spec?.design ?? ''} ${b.title ?? ''}`)));
+}
+
 // The first {...} block in a string, parsed; null if there is none that parses.
 function jsonIn(s) {
   const start = s.indexOf('{');
@@ -272,9 +287,15 @@ export function parseDecision(raw, koala, places = PLACES) {
       target = '';
     }
   } else if (action === 'build') {
-    if (!BLUEPRINTS[target]) target = ''; // keep working on what is underway
+    if (!BLUEPRINTS[target]) {
+      // anything else that comes with a name or a design is an invention; otherwise keep working
+      target = target && (text(obj.build_name, 40) || text(obj.build_design, 160)) ? 'new' : '';
+    }
   } else if (action === 'research') {
     target = text(obj.target, 120); // the question, as asked
+    if (!target) action = 'sit';
+  } else if (action === 'read') {
+    target = text(obj.target, 80); // the topic
     if (!target) action = 'sit';
   } else if (action === 'gather') {
     if (!RESOURCES.includes(target)) {
@@ -295,6 +316,8 @@ export function parseDecision(raw, koala, places = PLACES) {
     bond,
     opinion: text(obj.opinion, 120),
     buildName: text(obj.build_name, 40),
+    buildDesign: text(obj.build_design, 160),
+    wish: text(obj.wish, 120),
     note,
   };
 }
@@ -302,6 +325,7 @@ export function parseDecision(raw, koala, places = PLACES) {
 function describe(d, friendName, strength, places) {
   switch (d.action) {
     case 'file_ticket': return 'wrote a ticket for the visitor';
+    case 'read': return `opened a book about "${d.target}"`;
     case 'research': return `looked up "${d.target}" in the library`;
     case 'move': return `went to the ${places[d.target].name}`;
     case 'eat': return `ate eucalyptus at the ${PLACES[d.target].name}`;
@@ -323,22 +347,31 @@ function describe(d, friendName, strength, places) {
 function buildStep(world, k, rest, d) {
   world.builds ??= [];
   const open = openBuilds(world);
-  let b = BLUEPRINTS[d.target]
-    ? open.find((x) => x.kind === d.target)
-    : open.find((x) => x.plot === k.place) ?? open.find((x) => x.by === k.id) ?? open[0];
+  const inventing = d.target === 'new' && (d.buildName || d.buildDesign);
+  const title = d.buildName || d.buildDesign.slice(0, 40);
+  let b = inventing
+    ? open.find((x) => x.kind === 'custom' && x.title.toLowerCase() === title.toLowerCase())
+    : BLUEPRINTS[d.target]
+      ? open.find((x) => x.kind === d.target)
+      : open.find((x) => x.plot === k.place) ?? open.find((x) => x.by === k.id) ?? open[0];
   let started = false;
   const bp = BLUEPRINTS[d.target];
   // a bridge is built once; asking again just helps with whatever is underway
-  const wanted = bp && !(bp.bridge && world.builds.some((x) => x.kind === d.target));
+  const wanted = inventing || (bp && !(bp.bridge && (world.builds.some((x) => x.kind === d.target) || OPEN_ISLANDS.includes(bp.bridge))));
   if (!b && wanted && open.length < MAX_OPEN) {
     const here = placesOf(world)[k.place] ?? PLACES.clearing;
     const dist = (p) => Math.hypot(p.x - here.x, p.z - here.z);
-    const plot = bp.bridge ? null : freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
-    if (bp.bridge || plot) {
-      const pay = canAfford(stockOf(world), costOf(d.target));
-      if (!pay.ok) return { missing: pay.missing, title: bp.name };
-      spend(stockOf(world), costOf(d.target));
-      b = { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot?.id ?? null, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
+    const plot = bp?.bridge ? null : freePlots(world).sort((p, q) => dist(p) - dist(q))[0];
+    if (bp?.bridge || plot) {
+      const spec = inventing ? designSpec(d.buildName, d.buildDesign) : null;
+      const priced = inventing ? designCost({ ...spec, design: `${d.buildName} ${spec.design}` }) : null;
+      const cost = priced?.cost ?? costOf(d.target);
+      const pay = canAfford(stockOf(world), cost);
+      if (!pay.ok) return { missing: pay.missing, title: inventing ? title : bp.name };
+      spend(stockOf(world), cost);
+      b = inventing
+        ? { id: world.builds.length + 1, kind: 'custom', title, spec, cost, effort: priced.effort, plot: plot.id, progress: 0, done: false, by: k.id, helpers: [] }
+        : { id: world.builds.length + 1, kind: d.target, title: d.buildName || bp.name, plot: plot?.id ?? null, progress: 0, effort: bp.effort, done: false, by: k.id, helpers: [] };
       world.builds.push(b);
       started = true;
     }
@@ -431,6 +464,7 @@ export function applyDecision(world, id, d) {
     k.energy = clamp(k.energy - 8 * fatigue(k.strength), 0, 100);
     k.hunger = clamp(k.hunger + 4, 0, 100);
   }
+  if (d.action === 'read') k.energy = clamp(k.energy - 5 * fatigue(k.strength), 0, 100);
   if (d.action === 'climb') k.energy = clamp(k.energy - 8 * fatigue(k.strength), 0, 100);
   if (d.action === 'gather') k.energy = clamp(k.energy - 3 * fatigue(k.strength), 0, 100);
   if (d.action === 'build') {
@@ -447,6 +481,8 @@ export function applyDecision(world, id, d) {
   k.bond = clamp(k.bond + d.bond * 4, -100, 100);
   if (d.opinion) k.opinion = d.opinion;
   if (d.remember) push(k.memories, d.remember, MAX_MEMORIES);
+  const newWish = d.wish && d.wish !== k.wish ? d.wish : '';
+  if (newWish) k.wish = newWish;
 
   const did = step ? describeBuild(step)
     : d.action === 'gather' ? `gathered ${d.target} at the ${places[k.place]?.name ?? k.place}`
@@ -463,6 +499,7 @@ export function applyDecision(world, id, d) {
     tell(`${k.name} said: "${d.say}"`);
     log.push({ koala: id, kind: 'say', text: d.say });
   }
+  if (newWish) log.push({ koala: id, kind: 'wish', text: `${k.name} wishes: ${newWish}` });
   if (step?.b.done) {
     const t = step.b.title;
     push(k.recent, `You finished the ${t}! It stands at ${siteOf(step.b)} now.`, MAX_RECENT);
@@ -517,11 +554,13 @@ export function systemPrompt(id, world = null) {
   return [
     `You are ${k.name}, a koala living in a small eucalyptus grove with ${f.name}, a ${f.gender} (${PRONOUNS[f.gender] ?? 'they/them'})${family.length ? `, and your family: ${family.join(', ')}` : ''}.`,
     k.persona,
+    `You have your own mind and your own life. You are curious about: ${interestsOf(k).join(', ') || 'everything'}.`,
+    'Follow your curiosity: visit the library to read or look things up, then talk about what you learned and let it inspire what you build.',
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
     'A human visitor sometimes walks around the grove, gives you things or talks to you.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
-    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty).',
+    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
   ].join('\n');
 }
@@ -532,6 +571,8 @@ function ticketLines(world, id) {
   return mine.length ? [`Your tickets still waiting for the visitor: ${mine.map((t) => `"${t.title}"`).join(', ')}.`, ''] : [];
 }
 
+const designOf = (b) => (b.spec?.design ? `: ${b.spec.design}` : '');
+
 // What a koala knows about building: what stands, what is underway, what is possible.
 function buildLines(world) {
   const done = doneBuilds(world);
@@ -540,12 +581,13 @@ function buildLines(world) {
   const next = LANDS[landOf(world).length];
   const stock = stockOf(world);
   const affordable = Object.entries(BLUEPRINTS).filter(([id, bp]) => canAfford(stock, costOf(id)).ok
-    && !(bp.bridge && (world.builds ?? []).some((b) => b.kind === id)));
+    && !(bp.bridge && ((world.builds ?? []).some((b) => b.kind === id) || OPEN_ISLANDS.includes(bp.bridge))));
   return [
-    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
-    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
+    `Built so far: ${done.length ? done.map((b) => `${b.title} (${b.kind}${designOf(b)}) at ${siteOf(b)}`).join(', ') : 'nothing yet'}.`,
+    `Being built: ${open.length ? open.map((b) => `${b.title} (${b.kind}${designOf(b)}), ${b.progress} of ${b.effort} done, at ${siteOf(b)}`).join('; ') : 'nothing'}.`,
     `Stockpile: ${amounts(stockOf(world))}.`,
     `You can build (with what is in the Stockpile): ${affordable.length ? affordable.map(([id, bp]) => `${id} (${bp.name}, ${bp.effort} steps, costs ${amounts(costOf(id))})`).join(', ') : 'nothing yet. To build anything, first gather resources and store them in the Stockpile (a bench needs 2 wood from a gum tree)'}. `
+      + `Or invent anything you like: build with target new, a build_name and a build_design (e.g. a game machine, a castle, a footbridge, a fountain). Small costs 2 wood, medium 3 wood and 1 stone, big 5 wood and 3 stone. To keep working on something underway, leave the target empty. `
       + `Building together at the same site goes twice as fast. At most ${MAX_OPEN} things are built at once; ${free} free plot${free === 1 ? '' : 's'} left.`,
     next ? `Every ${LAND_EVERY} finished builds, new land rises from the water; next: ${next.name}.` : 'All the new land has risen.',
   ];
@@ -573,18 +615,25 @@ export function buildPrompt(world, id, clock) {
     'Things you remember:',
     ...(k.memories.length ? k.memories.slice(-PROMPT_MEMORIES).map((m) => `- ${m}`) : ['- nothing yet']),
     '',
+    k.wish ? `Your wish: "${k.wish}"` : 'You have no wish yet.',
+    '',
+    'Things you learned:',
+    ...((k.learned ?? []).length ? k.learned.slice(-5).map((m) => `- ${m}`) : ['- nothing yet']),
+    '',
     ...ticketLines(world, id),
     'What happened just now (oldest first):',
     ...(k.recent.length ? k.recent.slice(-PROMPT_RECENT).map((r) => `- ${r}`) : ['- nothing yet']),
     '',
+    'The library is on Library Isle (library_isle), across the bridge from the grove: there you can read books and look things up on the web.',
     `Places: ${Object.keys(places).map(place).join(', ')}. Eucalyptus grows on: ${TREES.join(', ')}.`,
     ...buildLines(world),
     'Actions: move (target: place), eat (target: a tree), climb (target: a tree), nap, play (target: ball, swing or pond),',
     `approach (go to ${f.name}), give (target: an item you hold, to ${f.name}),`,
     `gather (target: a resource found where you are; wood at the gum trees, water at the pond, stone at the lookout, more on islands you bridge to), store (carry what you hold to the Stockpile),`,
-    'build (target: one of the things you can build listed above, to start or help with it, or empty to keep working on what is underway; give a new build a build_name),',
+    'build (target: a thing you can build listed above, or new for something you invent (then give a build_name and a build_design); empty to keep working on what is underway),',
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',
+    ...(canReadAt(world, k.place) ? ['read (target: a topic you are curious about; open a book about it),'] : []),
     ...(k.place === 'library_isle' ? ['research (target: a short question to look up in the library and on the web; a few times a day),'] : []),
     'sit.',
     'Choose what you do next.',

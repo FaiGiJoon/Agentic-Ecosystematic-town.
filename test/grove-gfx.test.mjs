@@ -205,3 +205,16 @@ test('bushland: paperbarks stand on the pond bank, termite mounds out on open gr
   for (const a of all) for (const b of all) if (a !== b) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 2.5, 'not on top of each other');
   assert.deepEqual(bushlandSpots(T, P, { avoid: forest, seed: 5 }), s, 'the same grove every time');
 });
+
+test('a road is worn from the clearing to the Library bridge foot', async () => {
+  const { makeTerrain } = await import('../public/js/gfx/terrain-math.js');
+  const { ISLANDS, bridgeFoot } = await import('../hq/grove-economy.js');
+  const foot = bridgeFoot(ISLANDS.find((i) => i.id === 'library_isle'));
+  const bare = makeTerrain(PLACES);
+  const roaded = makeTerrain(PLACES, { roads: [foot] });
+  const c = PLACES.clearing;
+  const mid = { x: c.x + (foot.x - c.x) * 0.85, z: c.z + (foot.z - c.z) * 0.85 };
+  assert.ok(roaded.pathMask(mid.x, mid.z) > 0.8);
+  assert.ok(roaded.pathMask(mid.x, mid.z) > bare.pathMask(mid.x, mid.z) + 0.3);
+  assert.ok(roaded.blocked(mid.x, mid.z));
+});
