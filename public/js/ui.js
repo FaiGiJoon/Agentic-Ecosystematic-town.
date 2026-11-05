@@ -254,7 +254,7 @@ export function createUI({ scene, api }) {
   // --- feed and toast ------------------------------------------------------------------
   const feed = $('#feed');
   function onLog(e) {
-    if (e.kind === 'think') return;
+    if (e.kind === 'think' || e.kind === 'remember') return;
     const el = document.createElement('div');
     el.className = `ev ${LOG_CLASS[e.kind] ?? ''}`;
     const who = e.koala ? state?.koalas.find((k) => k.id === e.koala) : null;

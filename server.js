@@ -3,13 +3,15 @@ import path from 'node:path';
 import config from './hq/config.js';
 import { createApp } from './hq/http.js';
 import { Grove } from './hq/grove.js';
+import { Google } from './hq/google.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 const grove = new Grove({
   path: path.join(config.dataDir, 'grove.sqlite'),
   config: { ...config.grove, workDir: path.join(config.workDir, 'grove') },
 });
-const server = createApp({ grove, publicDir: path.join(config.root, 'public') });
+const google = new Google({ dataDir: config.dataDir });
+const server = createApp({ grove, publicDir: path.join(config.root, 'public'), google });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {

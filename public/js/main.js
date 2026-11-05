@@ -3,12 +3,14 @@ import { GroveScene } from './scene.js';
 import { createUI } from './ui.js';
 import { freshLog } from './view.js';
 import { loadKoalaParts } from './koala-parts.js';
+import { createDashboard } from './dashboard.js';
 
 // The koalas are modelled in Blender; if the file is missing they fall back to built-in shapes.
 await loadKoalaParts(new URL('../assets/CR_Koala.glb', import.meta.url).href);
 
 let scene = null;
 let ui = null;
+const dash = createDashboard({ api: groveApi });
 let lastLogId = 0;
 
 function boot(state) {
@@ -39,6 +41,7 @@ connectGrove({
     lastLogId = Math.max(lastLogId, state.log.at(-1)?.id ?? 0);
     scene.sync(state);
     ui.render(state);
+    dash.render(state);
   },
   onOffline(err) {
     if (ui) ui.offline(err?.message);
