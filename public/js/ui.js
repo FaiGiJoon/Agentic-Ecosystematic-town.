@@ -24,9 +24,12 @@ export function createUI({ scene, api }) {
   const name = (id) => state?.koalas.find((k) => k.id === id)?.name ?? id;
 
   // --- top bar -------------------------------------------------------------------------
+  const intro = $('#intro');
   const playBtn = $('#play');
   playBtn.addEventListener('click', async () => {
     if (!state || busy) return;
+    introDismissed = true; // pressing Play is answer enough for the welcome card
+    intro.hidden = true;
     busy = true;
     playBtn.disabled = true;
     try {
@@ -238,7 +241,6 @@ export function createUI({ scene, api }) {
   scene.onPick = (id) => select(id);
 
   // --- intro ---------------------------------------------------------------------------
-  const intro = $('#intro');
   $('#intro-play').addEventListener('click', async () => {
     introDismissed = true;
     intro.hidden = true;
