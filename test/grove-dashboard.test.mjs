@@ -36,7 +36,7 @@ test('problems: open tickets need the owner, and the spend warns at 80% and stop
   const k = [koala('crystal'), koala('ruby')];
   const t = problemsOf({ koalas: k, tickets: [{ koala: 'ruby', status: 'open', title: 'We need sand' }, { koala: 'crystal', status: 'answered', title: 'x' }], now: NOW });
   assert.equal(t.problems.length, 1);
-  assert.match(t.problems[0].text, /Needs you: ticket "We need sand"/);
+  assert.match(t.problems[0].text, /Needs you: approve or decline "We need sand"/);
   assert.equal(t.lights.ruby, 'warning');
   const warn = problemsOf({ koalas: k, spend: { today: 0.4, cap: 0.5 }, now: NOW });
   assert.match(warn.problems[0].text, /80% of the daily cap/);

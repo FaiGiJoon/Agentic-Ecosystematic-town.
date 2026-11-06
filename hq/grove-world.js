@@ -596,7 +596,8 @@ export function systemPrompt(id, world = null) {
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
     'A human visitor, who looks after the grove, walks around, gives you things and talks to you. You like the visitor and always answer when they talk to you: put your answer in to_visitor, speaking to them directly.',
-    'The visitor reads tickets and helps: they can build things, bring resources and answer questions. Whenever you need or want something you cannot get yourself (resources you cannot reach, help with a build, a tool, something for your wish, or more freedom and access: new places, more research, new abilities), write it in need. It becomes a ticket, and you can keep doing your action.',
+    'Whenever you need or want something you cannot get yourself (resources you cannot reach, a build, a tool, something for your wish, or more freedom and access: new places, more research, new abilities), write it in need. It becomes a ticket, and you can keep doing your action.',
+    'The visitor approves or declines each ticket. Approved: you get it (a build stands finished, or what it needs is put in the Stockpile; resources go to the Stockpile; more research means more trips). Declined: you cannot have it. If you still want it, file a new ticket with a better reason.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
     'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish), trait (something new about who you are, or empty), to_visitor (your answer to the visitor, or empty), need (something you need from the visitor, or empty).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
@@ -681,8 +682,10 @@ function reflectLines(k) {
 // What the visitor said that the koala has not answered yet: first in the prompt, so it is never lost.
 function visitorLines(k) {
   const waiting = k.visitor ?? [];
-  if (!waiting.length) return [];
+  const allowed = (k.allowed ?? []).length ? [`The visitor has approved for you: ${k.allowed.join('; ')}.`, ''] : [];
+  if (!waiting.length) return allowed;
   return [
+    ...allowed,
     'THE VISITOR IS TALKING TO YOU. Answer them now in to_visitor (you can still do any action):',
     ...waiting.map((v) => `- ${v.text}`),
     '',
@@ -736,4 +739,77 @@ export function buildPrompt(world, id, clock) {
     'Choose what you do next.',
   ];
   return lines.join('\n');
+}
+
+// --- approved tickets: the visitor grants what a koala asked for ------------------------------
+
+const RES_WORDS = { wood: 'wood', water: 'water', sand: 'sand', stone: 'stone', stones: 'stone', book: 'book', books: 'book' };
+const BUILD_WORDS = /\b(build|make|tower|house|hut|castle|bridge|boat|ship|garden|statue|playground|machine|treehouse|lighthouse|fountain|swing|slide|nest|perch|telescope|observatory|shelter|cabin|den|tunnel|pool|bench|lantern)s?\b/i;
+const RESEARCH_WORDS = /\b(research|web|search(es)?|internet|library|read(ing)?|books?|learn(ing)?)\b/i;
+export const GRANT_RESEARCH = 6; // extra research trips for the day when the visitor allows more
+const MAX_GRANT = 12; // at most this much of one resource per approval
+
+// The resources a request names: "3 wood and 2 stones" -> { wood: 3, stone: 2 }.
+export function resourcesIn(text) {
+  const out = {};
+  for (const m of String(text).matchAll(/(\d+)\s*(?:more\s+)?(wood|water|sand|stones?|books?)\b/gi)) {
+    const r = RES_WORDS[m[2].toLowerCase()];
+    out[r] = Math.min(MAX_GRANT, (out[r] ?? 0) + Number(m[1]));
+  }
+  return out;
+}
+
+// What the request is, in a few words: "My wish: Build a tall tower so I can..." -> "Build a tall tower".
+const titleOf = (text) => {
+  const t = String(text).replace(/^my wish:\s*/i, '').split(/[.!?]|\b(?:so|because|to help|for me)\b/i)[0].trim();
+  if (t.length <= 44) return t || 'Gift';
+  return t.slice(0, 45).replace(/\s+\S*$/, '') || t.slice(0, 44);
+};
+
+// The visitor approved a ticket. Resources it names go into the Stockpile; a bridge to an island it
+// names stands at once; anything else it asks to build stands finished on the nearest free plot (or,
+// with no plot free, its materials go into the Stockpile so the koalas can build it themselves);
+// more research means more trips today. Whatever it asked for is also kept as an allowance.
+export function grantTicket(world, id, text) {
+  const k = world.koalas[id];
+  const said = [];
+  const log = [];
+  let research = 0;
+  const res = resourcesIn(text);
+  const island = ISLANDS.find((i) => !OPEN_ISLANDS.includes(i.id) && new RegExp(`\\b${i.name}\\b`, 'i').test(text));
+  const wantsBuild = BUILD_WORDS.test(text);
+  if (Object.keys(res).length) {
+    add(stockOf(world), res);
+    said.push(`${amounts(res)} ${Object.values(res).reduce((a, b) => a + b, 0) === 1 ? 'is' : 'are'} now in the Stockpile`);
+  }
+  world.builds ??= [];
+  const landBefore = landOf(world).length;
+  if (island && /\bbridge\b/i.test(text) && !bridged(world).has(island.id)) {
+    const b = { id: world.builds.length + 1, kind: `bridge_${island.id}`, title: `Bridge to ${island.name}`, plot: null, progress: 4, effort: 4, done: true, by: id, helpers: [id], gift: true };
+    world.builds.push(b);
+    said.push(`the ${b.title} stands now`);
+    log.push({ koala: id, kind: 'built', text: `The visitor built the ${b.title} for ${k.name}!`, target: b.kind });
+  } else if (wantsBuild && !Object.keys(res).length) {
+    const title = titleOf(text);
+    const spec = designSpec(title, text.replace(/^my wish:\s*/i, ''));
+    const here = placesOf(world)[k.place] ?? PLACES.clearing;
+    const plot = freePlots(world).sort((p, q) => Math.hypot(p.x - here.x, p.z - here.z) - Math.hypot(q.x - here.x, q.z - here.z))[0];
+    const priced = designCost({ ...spec, design: `${title} ${spec.design}` });
+    if (plot) {
+      const b = { id: world.builds.length + 1, kind: 'custom', title, spec, cost: {}, effort: priced.effort, plot: plot.id, progress: priced.effort, done: true, by: id, helpers: [id], gift: true };
+      world.builds.push(b);
+      said.push(`the ${title} stands finished in the grove`);
+      log.push({ koala: id, kind: 'built', text: `The visitor built the ${title} for ${k.name}!`, target: plot.id });
+    } else {
+      add(stockOf(world), priced.cost);
+      said.push(`there is no free plot, so ${amounts(priced.cost)} for the ${title} ${Object.keys(priced.cost).length ? 'are' : 'is'} in the Stockpile: you can build it yourself`);
+    }
+  }
+  if (RESEARCH_WORDS.test(text)) {
+    research = GRANT_RESEARCH;
+    said.push(`you may do ${GRANT_RESEARCH} more research trips today`);
+  }
+  for (const l of landOf(world).slice(landBefore)) log.push({ kind: 'land', text: `The grove grew: ${l.name} rose from the water!`, target: l.id });
+  k.allowed = [...(k.allowed ?? []), String(text).replace(/^my wish:\s*/i, '').trim().slice(0, 120)].slice(-8);
+  return { said, log, research, summary: said.length ? said.join('; ') : 'you may do it' };
 }

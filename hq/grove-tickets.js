@@ -15,7 +15,7 @@ export class Tickets {
       insert: p("INSERT INTO grove_tickets (koala, text, status, created, updated) VALUES (?, ?, 'open', ?, ?)"),
       get: p('SELECT * FROM grove_tickets WHERE id = ?'),
       set: p('UPDATE grove_tickets SET status = ?, reply = ?, updated = ? WHERE id = ?'),
-      live: p("SELECT * FROM grove_tickets WHERE status != 'closed' ORDER BY id"),
+      live: p("SELECT * FROM grove_tickets WHERE status IN ('open', 'answered') ORDER BY id"),
       openCount: p("SELECT COUNT(*) AS n FROM grove_tickets WHERE koala = ? AND status = 'open'"),
     };
   }
@@ -39,6 +39,13 @@ export class Tickets {
     const t = this.get(id);
     this.q.set.run('answered', String(text), Date.now(), id);
     return { ...t, status: 'answered', reply: String(text) };
+  }
+
+  // The visitor's decision: approved or declined. Either way the ticket leaves the board.
+  decide(id, status) {
+    const t = this.get(id);
+    this.q.set.run(status, null, Date.now(), id);
+    return { ...t, status };
   }
 
   close(id) {

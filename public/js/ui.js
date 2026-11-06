@@ -365,31 +365,31 @@ export function createUI({ scene, api }) {
       <div class="costs">${Object.entries(state.blueprints ?? {}).filter(([id]) => !id.startsWith('bridge_')).map(([id, bp]) => `<div><b>${esc(bp.name)}</b><span>${esc(cost(state.costs?.[id]))}</span></div>`).join('')}${['small', 'medium', 'big'].map((size) => `<div><b>Your own invention — ${size}</b><span>${esc(cost(state.customCosts?.[size]?.cost))}</span></div>`).join('')}</div>`;
   }
 
-  // Tickets the koalas wrote for you, with a reply box and a close button each.
+  // The koalas' requests, like a helpdesk: approve (they get it) or decline (they don't).
   function drawTickets() {
     const body = $('#tab-tickets');
-    if (body.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // don't wipe a reply being typed
-    const list = state.tickets ?? [];
-    body.innerHTML = `<p class="empty">When the koalas hit a problem they can't solve, they write it down for you. Your answer reaches them on their next decision.</p>`
+    const list = (state.tickets ?? []).filter((t) => t.status === 'open');
+    body.innerHTML = `<p class="empty">What the koalas need or wish for. Approve and they get it: a build stands finished, or what it needs goes into the Stockpile. Decline and they can't have it unless they ask again.</p>`
       + (list.length ? list.map((t) => `
-      <article class="tcard ${t.status}" data-id="${t.id}">
-        <div class="thead"><b>${esc(name(t.koala))}</b><span>${t.status === 'open' ? 'waiting for you' : 'answered'}</span></div>
+      <article class="tcard open" data-id="${t.id}">
+        <div class="thead"><b>${esc(name(t.koala))}</b><span>waiting for you</span></div>
         <p class="ttext">${esc(t.text)}</p>
-        ${t.reply ? `<p class="treply">You: ${esc(t.reply)}</p>` : ''}
-        <form class="treplyform"><textarea maxlength="300" rows="2" placeholder="Write an answer" aria-label="Answer ${esc(name(t.koala))}"></textarea>
-        <div class="tbtns"><button class="btn" type="submit">${t.reply ? 'Answer again' : 'Answer'}</button><button class="btn ghost tclose" type="button">Close ticket</button></div></form>
+        <div class="tbtns"><button class="btn tapprove" type="button">Approve</button><button class="btn ghost tdecline" type="button">Decline</button></div>
       </article>`).join('') : '<p class="empty">No tickets right now.</p>');
     for (const card of body.querySelectorAll('.tcard')) {
       const id = Number(card.dataset.id);
-      card.querySelector('form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const text = card.querySelector('textarea').value.trim();
-        if (!text) return;
-        try { await api.reply(id, text); toast('Answer sent.'); } catch (err) { toast(err.message); }
-      });
-      card.querySelector('.tclose').addEventListener('click', async () => {
-        try { await api.close(id); } catch (err) { toast(err.message); }
-      });
+      const decide = (yes) => async () => {
+        for (const b of card.querySelectorAll('button')) b.disabled = true;
+        try {
+          await (yes ? api.approve(id) : api.decline(id));
+          toast(yes ? `Approved. ${card.querySelector('b').textContent} hears it first thing.` : 'Declined.');
+        } catch (err) {
+          toast(err.message);
+          for (const b of card.querySelectorAll('button')) b.disabled = false;
+        }
+      };
+      card.querySelector('.tapprove').addEventListener('click', decide(true));
+      card.querySelector('.tdecline').addEventListener('click', decide(false));
     }
   }
 

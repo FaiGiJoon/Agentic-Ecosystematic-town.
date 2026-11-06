@@ -182,9 +182,10 @@ export function createApp({ grove, publicDir, google = null }) {
         const body = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.act(body)));
       }
-      const ticket = /^\/api\/grove\/tickets\/(\d+)\/(reply|close)$/.exec(pathname);
+      const ticket = /^\/api\/grove\/tickets\/(\d+)\/(reply|close|approve|decline)$/.exec(pathname);
       if (ticket) {
         const tid = Number(ticket[1]);
+        if (ticket[2] === 'approve' || ticket[2] === 'decline') return sendJson(res, 200, refuse(() => grove.decideTicket(tid, ticket[2] === 'approve')));
         if (ticket[2] === 'close') return sendJson(res, 200, refuse(() => grove.closeTicket(tid)));
         const { text } = await readJson(req);
         return sendJson(res, 200, refuse(() => grove.replyTicket(tid, text)));

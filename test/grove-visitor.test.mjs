@@ -144,3 +144,85 @@ test('every 15 decisions a koala reflects on what it really wants, and asks for 
   assert.match(crystal[15].prompt, /more freedom, more access/);
   assert.ok(grove.state().tickets.some((t) => t.koala === 'crystal' && /more web searches/.test(t.text)));
 });
+
+// --- helpdesk: approve or decline -------------------------------------------------------------
+
+import { grantTicket, resourcesIn, GRANT_RESEARCH, PLOTS } from '../hq/grove-world.js';
+
+test('resourcesIn reads amounts from a request', () => {
+  assert.deepEqual(resourcesIn('Please bring 3 wood and 3 stone, and 2 more books'), { wood: 3, stone: 3, book: 2 });
+  assert.deepEqual(resourcesIn('99 sand'), { sand: 12 }, 'capped');
+  assert.deepEqual(resourcesIn('a ladder'), {});
+});
+
+test('approving a wish to build: it stands finished in the grove', async () => {
+  const { grove, step } = setup((k) => (k === 'crystal' ? { wish: 'Build a tall star-watching tower at Lookout Rock so I can find the brightest crystal' } : {}));
+  grove.play();
+  await step(5000);
+  const t = grove.state().tickets.find((x) => x.koala === 'crystal');
+  grove.decideTicket(t.id, true);
+  const s = grove.state();
+  const b = s.builds.find((x) => x.gift);
+  assert.ok(b && b.done, 'a finished build');
+  assert.equal(b.title, 'Build a tall star-watching tower at Lookout');
+  assert.equal(b.spec.shape, 'tower');
+  assert.equal(b.spec.size, 'big');
+  assert.equal(s.tickets.length, 0, 'decided tickets leave the board');
+  const c = koala(grove, 'crystal');
+  assert.match(c.visitor[0].text, /The visitor APPROVED your ticket "My wish: Build a tall star-watching tower[^"]*": the .* stands finished in the grove\./);
+  assert.ok(s.log.some((e) => e.kind === 'built' && /The visitor built the/.test(e.text)));
+  assert.ok(s.log.some((e) => e.kind === 'visitor' && e.action === 'approve'));
+  assert.throws(() => grove.decideTicket(t.id, false), /already decided/);
+});
+
+test('approving resources fills the Stockpile; approving more research adds trips today', () => {
+  const w = { koalas: { crystal: newKoala('crystal') }, builds: [], stock: { wood: 1 } };
+  const g = grantTicket(w, 'crystal', 'Please bring 3 wood and 2 stone for the tower');
+  assert.deepEqual(w.stock, { wood: 4, stone: 2 });
+  assert.equal(w.builds.length, 0, 'resources, not a free build');
+  assert.match(g.summary, /3 wood and 2 stone are now in the Stockpile/);
+  const r = grantTicket(w, 'crystal', 'More time at the library and more web searches');
+  assert.equal(r.research, GRANT_RESEARCH);
+  assert.deepEqual(w.koalas.crystal.allowed, ['Please bring 3 wood and 2 stone for the tower', 'More time at the library and more web searches']);
+});
+
+test('approving a bridge to an island builds that bridge', () => {
+  const w = { koalas: { ruby: newKoala('ruby') }, builds: [], stock: {} };
+  grantTicket(w, 'ruby', 'Could you build a bridge to Stone Crag?');
+  assert.ok(w.builds.some((b) => b.kind === 'bridge_stone_crag' && b.done));
+});
+
+test('with no free plot, an approved build comes as materials so the koalas build it themselves', () => {
+  const w = { koalas: { ruby: newKoala('ruby') }, builds: [], stock: {} };
+  // every plot taken by something still being built, so no land rises and nothing is free
+  PLOTS.forEach((p, i) => w.builds.push({ id: i + 1, kind: 'custom', title: `b${i}`, spec: { shape: 'house', size: 'small', parts: [], colors: ['brown'], design: '' }, plot: p.id, done: false, progress: 0, effort: 2, by: 'ruby', helpers: [] }));
+  const g = grantTicket(w, 'ruby', 'Make a small moon perch');
+  assert.equal(w.builds.some((b) => b.gift), false);
+  assert.deepEqual(w.stock, { wood: 2 });
+  assert.match(g.summary, /you can build it yourself/);
+});
+
+test('declining: the koala hears it cannot have it, and has to ask again in a new ticket', async () => {
+  let need = 'A boat to sail far away';
+  const { grove, step } = setup((k) => (k === 'ruby' ? { need } : {}));
+  grove.play();
+  await step(5000);
+  const t = grove.state().tickets.find((x) => x.koala === 'ruby');
+  grove.decideTicket(t.id, false);
+  assert.equal(grove.state().builds.filter((b) => b.gift).length, 0);
+  assert.match(koala(grove, 'ruby').visitor[0].text, /DECLINED your ticket "A boat to sail far away"\. You cannot have it\. If you still want it, file a new ticket/);
+  need = 'A boat to sail far away, because I want to see where the moon sets';
+  await step();
+  assert.ok(grove.state().tickets.some((x) => x.koala === 'ruby' && /moon sets/.test(x.text)), 'a new ticket is allowed');
+});
+
+test('approved research trips raise today\'s limit', async () => {
+  const { grove, calls, step } = setup((k, req) => (req.kind ? {} : k === 'crystal' ? { action: 'research', target: 'Why?' } : {}));
+  grove.world.builds = [{ id: 1, kind: 'bridge_library_isle', title: 'Bridge', plot: null, progress: 4, effort: 4, done: true, by: 'crystal', helpers: ['crystal'] }];
+  grove.world.koalas.crystal.place = 'library_isle';
+  const t = grove.tickets.open('crystal', 'More web searches please');
+  grove.decideTicket(t.id, true);
+  grove.play();
+  for (let i = 0; i < 40; i++) await step(70000);
+  assert.equal(calls.filter((c) => c.kind === 'research').length, 16 + GRANT_RESEARCH);
+});

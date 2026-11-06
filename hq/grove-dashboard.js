@@ -29,7 +29,7 @@ export function problemsOf({ koalas, failures = [], spend = { today: 0, cap: Inf
     else if (k.energy <= RULES.energyWarn) add('warning', k.id, `${k.name} is tired (energy ${Math.round(k.energy)})`);
   }
   for (const f of failures) if (now - f.ts <= RULES.failWindowMs) add('problem', f.koala, f.text, f.ts);
-  for (const t of tickets) if (t.status === 'open') add('warning', t.koala, `Needs you: ticket "${t.title}"`, t.ts ?? t.created ?? now);
+  for (const t of tickets) if (t.status === 'open') add('warning', t.koala, `Needs you: approve or decline "${t.title}"`, t.ts ?? t.created ?? now);
   if (spend.cap > 0 && spend.today >= spend.cap) add('problem', null, `Daily cap reached: the koalas stop deciding until tomorrow`);
   else if (spend.cap > 0 && spend.today >= spend.cap * RULES.spendWarn) add('warning', null, `Spend is at ${Math.round((spend.today / spend.cap) * 100)}% of the daily cap`);
   list.sort((a, b) => SEVERITY[b.level] - SEVERITY[a.level] || b.ts - a.ts);

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
   KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, canReadAt, growthOf, carryLimit,
-  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES, REFLECT_EVERY,
+  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES, REFLECT_EVERY, grantTicket,
 } from './grove-world.js';
 import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
@@ -321,7 +321,8 @@ export class Grove {
     }
     const day = startOfDay(this.now());
     const used = this.#meta('research', { day, count: 0 });
-    if (used.day === day && used.count >= this.config.researchPerDay) {
+    const bonus = this.#meta('researchBonus', { day, n: 0 });
+    if (used.day === day && used.count >= this.config.researchPerDay + (bonus.day === day ? bonus.n : 0)) {
       k.recent.push('You wanted to look something up, but the library is closed for today. Come back tomorrow.');
       return false;
     }
@@ -461,6 +462,45 @@ export class Grove {
     k.recent.push('You told the visitor your wish in a ticket.');
     this.#log({ koala: id, kind: 'ticket', text: `${k.name} filed a ticket: ${t.title}` });
     this.world.tickets = this.tickets.list();
+  }
+
+  // Helpdesk: the visitor approves a ticket (the koala gets it) or declines it (it does not).
+  decideTicket(ticketId, approve) {
+    const t = this.tickets.get(ticketId);
+    if (!t) throw new GroveError(404, 'no such ticket');
+    if (t.status !== 'open') throw new GroveError(409, 'this ticket was already decided');
+    const k = this.world.koalas[t.koala];
+    this.tickets.decide(ticketId, approve ? 'approved' : 'declined');
+    if (approve) {
+      const g = k ? grantTicket(this.world, t.koala, t.text) : { log: [], research: 0, summary: '' };
+      if (g.research) {
+        const day = startOfDay(this.now());
+        const b = this.#meta('researchBonus', { day, n: 0 });
+        this.#setMeta('researchBonus', { day, n: (b.day === day ? b.n : 0) + g.research });
+      }
+      this.#log({ koala: t.koala, kind: 'visitor', text: `You approved ${k?.name ?? 'a koala'}'s ticket: ${t.title}`, action: 'approve' });
+      for (const e of g.log) this.#log(e);
+      if (k) {
+        k.recent.push(`The visitor approved your ticket "${t.title}": ${g.summary}.`);
+        this.#waitForAnswer(k, `The visitor APPROVED your ticket "${t.title}": ${g.summary}.`);
+      }
+      this.#setMeta('builds', this.world.builds);
+      this.#setMeta('stock', this.world.stock);
+    } else {
+      this.#log({ koala: t.koala, kind: 'visitor', text: `You declined ${k?.name ?? 'a koala'}'s ticket: ${t.title}`, action: 'decline' });
+      if (k) {
+        k.recent.push(`The visitor declined your ticket "${t.title}".`);
+        this.#waitForAnswer(k, `The visitor DECLINED your ticket "${t.title}". You cannot have it. If you still want it, file a new ticket and explain why.`);
+      }
+    }
+    if (k) {
+      if (k.recent.length > 10) k.recent.splice(0, k.recent.length - 10);
+      this.#save(k.id);
+      if (!k.follows) this.#nudge(k.id);
+    }
+    this.world.tickets = this.tickets.list();
+    this.#emit();
+    return this.state();
   }
 
   replyTicket(ticketId, text) {

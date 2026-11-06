@@ -65,11 +65,17 @@ then a new trait they have noticed about themselves.
 - **Family.** When both are grown up, love each other and choose to `nest`, a baby is born a grove
   day later and you get to name it. It follows its mother, makes no model calls of its own, and
   starts deciding for itself once it is a youngster. The grove holds at most 4 koalas.
-- **Tickets.** Whenever a koala needs or wants something it can't get itself ("two stone for the
-  bridge to Stone Crag", "help with the treehouse roof"), it says so and a ticket appears for you,
-  without the koala giving up what it was doing. The same need is not filed twice, and each koala
-  has at most 3 waiting. Answer in the **Tickets** tab; the koala sees your answer first thing and
-  thanks you or reacts.
+- **Tickets, like a helpdesk.** Whenever a koala needs or wants something it can't get itself
+  ("two stone for the bridge to Stone Crag", "more web searches"), it says so and a ticket appears
+  for you, without the koala giving up what it was doing. You only **Approve** or **Decline**:
+  - **Approve** and the koala gets it. Resources it names go into the Stockpile. A bridge to an
+    island stands at once. Anything else it asks to build stands finished in the grove (with no
+    free plot, its materials go into the Stockpile so the koalas build it themselves). More
+    research means 6 more trips today. The koala also remembers what you allowed.
+  - **Decline** and it can't have it. If it still wants it, it has to file a new ticket and say why.
+
+  Either way the koala hears your decision first thing and reacts. The same need is not filed
+  twice, and each koala has at most 3 waiting.
 - **What they really want.** A koala's wish (shown as "Wants" on the dashboard) becomes a ticket
   too, and a new wish replaces the old ticket. Every 15 decisions a koala also stops to reflect on
   its memories, wish and what it learned, and asks you for what it really wants: more freedom,
