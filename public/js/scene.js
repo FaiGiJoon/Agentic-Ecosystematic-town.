@@ -802,7 +802,7 @@ export class GroveScene {
     }
     const view = this.koalas.get(e.koala);
     if (!view) return;
-    if (e.kind === 'say') view.say(e.text);
+    if (e.kind === 'say' || e.kind === 'reply') view.say(e.text);
     if (e.kind === 'think') view.thought(e.text);
     const at = V(view.pos.x, view.pos.y + this.groundY(view.pos.x, view.pos.z) + 1.9 * view.size, view.pos.z);
     if (e.kind === 'grow') {

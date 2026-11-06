@@ -65,8 +65,11 @@ then a new trait they have noticed about themselves.
 - **Family.** When both are grown up, love each other and choose to `nest`, a baby is born a grove
   day later and you get to name it. It follows its mother, makes no model calls of its own, and
   starts deciding for itself once it is a youngster. The grove holds at most 4 koalas.
-- **Tickets.** When a koala hits a problem it can't solve ("we need more stone for the bridge"),
-  it writes a ticket for you. Your answer goes into its memory.
+- **Tickets.** Whenever a koala needs or wants something it can't get itself ("two stone for the
+  bridge to Stone Crag", "help with the treehouse roof"), it says so and a ticket appears for you,
+  without the koala giving up what it was doing. The same need is not filed twice, and each koala
+  has at most 3 waiting. Answer in the **Tickets** tab; the koala sees your answer first thing and
+  thanks you or reacts.
 
 ## Getting smarter
 
@@ -98,7 +101,9 @@ to go deeper when something puzzles them.
 
 You are the little visitor with the lantern. Walk with WASD or the arrow keys (Shift runs), or
 click the grass. Click a koala, or press E next to it, to give it a leaf, blossom, pebble, ball or
-feather, say something, or pat it. It reacts on its next decision.
+feather, say something, or pat it. **The koalas talk back:** what you say stays at the top of the
+koala's mind until it answers you (within a few seconds), and the answer shows as a speech bubble
+and as "to you" in the feed. If it has not answered after three turns, your message fades.
 
 - **Time of day.** A day lasts 20 minutes, with dawn, dusk, stars and fireflies. Click the clock to
   jump to morning, noon, evening or night.

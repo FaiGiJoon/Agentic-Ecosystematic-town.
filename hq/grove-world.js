@@ -155,9 +155,11 @@ export const DECISION_SCHEMA = {
     build_name: { type: 'string', description: 'When you start building something, a name for it; otherwise empty.' },
     wish: { type: 'string', description: 'Something you would love to do or make one day, or empty to keep your wish.' },
     trait: { type: 'string', description: 'Something new you just found out about who you are (a habit, a taste, a belief, a quirk), or empty. Rarely.' },
+    to_visitor: { type: 'string', description: 'What you say to the visitor. Always answer here when the visitor has talked to you or answered your ticket; otherwise empty.' },
+    need: { type: 'string', description: 'Something you need or want from the visitor that you cannot get yourself (it becomes a ticket the visitor reads), or empty.' },
     build_design: { type: 'string', description: 'When you start building something new that you invented (target new), one sentence on what it is and what it looks like; otherwise empty.' },
   },
-  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'trait', 'build_design'],
+  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'trait', 'to_visitor', 'need', 'build_design'],
   additionalProperties: false,
 };
 
@@ -345,6 +347,8 @@ export function parseDecision(raw, koala, places = PLACES) {
     buildDesign: text(obj.build_design, 160),
     wish: text(obj.wish, 120),
     trait: text(obj.trait, 80),
+    toVisitor: text(obj.to_visitor, 200),
+    need: text(obj.need, 160),
     note,
   };
 }
@@ -591,9 +595,10 @@ export function systemPrompt(id, world = null) {
     'You are your own koala with your own personality. It grows from what you do, what you like and what you learn. Now and then, when you notice something new about yourself, name it as a trait.',
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
-    'A human visitor sometimes walks around the grove, gives you things or talks to you.',
+    'A human visitor, who looks after the grove, walks around, gives you things and talks to you. You like the visitor and always answer when they talk to you: put your answer in to_visitor, speaking to them directly.',
+    'The visitor reads tickets and helps: they can build things, bring resources and answer questions. Whenever you need or want something you cannot get yourself (resources you cannot reach, help with a build, a tool, something for your wish), write it in need. It becomes a ticket, and you can keep doing your action.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
-    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish), trait (something new about who you are, or empty).',
+    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish), trait (something new about who you are, or empty), to_visitor (your answer to the visitor, or empty), need (something you need from the visitor, or empty).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
   ].join('\n');
 }
@@ -660,6 +665,17 @@ function mindLines(k) {
   ].filter((l, i, a) => l !== '' || a[i - 1] !== '');
 }
 
+// What the visitor said that the koala has not answered yet: first in the prompt, so it is never lost.
+function visitorLines(k) {
+  const waiting = k.visitor ?? [];
+  if (!waiting.length) return [];
+  return [
+    'THE VISITOR IS TALKING TO YOU. Answer them now in to_visitor (you can still do any action):',
+    ...waiting.map((v) => `- ${v.text}`),
+    '',
+  ];
+}
+
 export function buildPrompt(world, id, clock) {
   const k = world.koalas[id];
   const f = friendOf(world, id);
@@ -668,6 +684,7 @@ export function buildPrompt(world, id, clock) {
   const g = growthOf(k);
   const fg = growthOf(f);
   const lines = [
+    ...visitorLines(k),
     `It is ${clock.label}, ${clock.phase}.`,
     `You are at the ${place(k.place)}, ${k.activity === 'nap' ? 'napping' : `last action: ${k.activity}`}.`,
     `Hunger: ${level(k.hunger, ['full', 'peckish', 'hungry', 'starving'])}. Energy: ${level(k.energy, ['exhausted', 'tired', 'awake', 'full of beans'])}.`,

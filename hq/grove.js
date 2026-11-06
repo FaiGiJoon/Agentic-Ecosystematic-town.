@@ -27,8 +27,8 @@ export const GROVE_DEFAULTS = {
   idleMinMs: 40000, // ...40-90 s when nothing has happened to it since it last decided...
   maxMs: 60000,
   idleMaxMs: 90000,
-  replyMinMs: 6000, // ...sooner when spoken to or given something
-  replyMaxMs: 12000,
+  replyMinMs: 2500, // ...sooner when spoken to or given something
+  replyMaxMs: 5000,
   gapMs: 12000, // never two decisions of one koala closer than this
   failMs: 60000,
   presenceMs: 45000, // the page must check in this often
@@ -101,7 +101,7 @@ export class Grove {
       allUsage: p('SELECT * FROM grove_usage ORDER BY id'),
       allLog: p('SELECT * FROM grove_log ORDER BY id'),
       failures: p("SELECT ts, koala, text FROM grove_log WHERE kind = 'error' AND ts >= ? ORDER BY id DESC"),
-      feed: p("SELECT * FROM grove_log WHERE kind IN ('think', 'act', 'say', 'learn', 'grow', 'error', 'ticket', 'remember') ORDER BY id DESC LIMIT ?"),
+      feed: p("SELECT * FROM grove_log WHERE kind IN ('think', 'act', 'say', 'reply', 'visitor', 'learn', 'grow', 'error', 'ticket', 'remember') ORDER BY id DESC LIMIT ?"),
       sums: p(`SELECT koala, COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(tokens_in), 0) AS tokens_in,
         COALESCE(SUM(tokens_out), 0) AS tokens_out FROM grove_usage WHERE ts >= ? GROUP BY koala`),
       lastUsage: p('SELECT * FROM grove_usage ORDER BY id DESC LIMIT 1'),
@@ -427,6 +427,27 @@ export class Grove {
     this.world.tickets = this.tickets.list();
   }
 
+  // The visitor spoke: kept at the top of the koala's prompt until it answers (or has had 3 turns).
+  #waitForAnswer(k, text) {
+    k.visitor = [...(k.visitor ?? []), { text, tries: 0 }].slice(-3);
+  }
+
+  // A koala asks the visitor for something without giving up its turn: it becomes a ticket.
+  #askVisitor(id, need) {
+    const k = this.world.koalas[id];
+    const key = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim().slice(0, 40);
+    const open = this.tickets.list().filter((t) => t.koala === id && t.status === 'open');
+    if (open.some((t) => key(t.text) === key(need))) return;
+    if (this.tickets.openCount(id) >= MAX_OPEN_TICKETS) {
+      k.recent.push('You wanted to ask the visitor for something, but three of your tickets are already waiting.');
+      return;
+    }
+    const t = this.tickets.open(id, need);
+    k.recent.push(`You asked the visitor in a ticket: "${need}"`);
+    this.#log({ koala: id, kind: 'ticket', text: `${k.name} filed a ticket: ${t.title}` });
+    this.world.tickets = this.tickets.list();
+  }
+
   replyTicket(ticketId, text) {
     const t = this.tickets.get(ticketId);
     if (!t) throw new GroveError(404, 'no such ticket');
@@ -436,6 +457,7 @@ export class Grove {
     const k = this.world.koalas[t.koala];
     if (k) {
       k.recent.push(`The visitor answered your ticket: "${reply}"`);
+      this.#waitForAnswer(k, `The visitor answered your ticket "${t.title}": "${reply}"`);
       if (k.recent.length > 10) k.recent.splice(0, k.recent.length - 10);
       this.#save(k.id);
       if (!k.follows) this.#nudge(k.id);
@@ -530,6 +552,15 @@ export class Grove {
     }
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
+    const me = this.world.koalas[id];
+    if (decision.toVisitor) {
+      this.#log({ koala: id, kind: 'reply', text: decision.toVisitor });
+      me.recent.push(`You said to the visitor: "${decision.toVisitor}"`);
+      me.visitor = [];
+    } else if ((me.visitor ?? []).length) {
+      me.visitor = me.visitor.map((v) => ({ ...v, tries: v.tries + 1 })).filter((v) => v.tries < 3);
+    }
+    if (decision.need) this.#askVisitor(id, decision.need);
     // memories roll off the koala's own list, so the log keeps the full history for the export
     if (decision.remember && !this.world.koalas[id].memories.includes(decision.remember)) this.#log({ koala: id, kind: 'remember', text: decision.remember });
     if (decision.action === 'file_ticket') this.#fileTicket(id, decision);
@@ -642,6 +673,7 @@ export class Grove {
       const t = typeof text === 'string' ? text.trim().replace(/\s+/g, ' ') : '';
       if (!t || t.length > 140) throw new GroveError(400, 'say 1 to 140 characters');
       k.recent.push(`The visitor said: "${t}"`);
+      this.#waitForAnswer(k, `The visitor said: "${t}"`);
       this.#log({ koala, kind: 'visitor', text: `You to ${k.name}: "${t}"`, action: 'say' });
     } else if (kind === 'pet') {
       k.recent.push('The visitor gave you a gentle pat on the head.');

@@ -12,7 +12,7 @@ const DOING = {
   move: 'looking around', eat: 'munching eucalyptus', nap: 'napping', play: 'playing', climb: 'up the tree',
   approach: 'keeping company', give: 'sharing', build: 'building', gather: 'gathering', store: 'stocking up', research: 'reading', read: 'reading a book', file_ticket: 'writing a ticket', nest: 'nesting', sit: 'sitting',
 };
-const LOG_CLASS = { say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow', wish: 'grow' };
+const LOG_CLASS = { reply: 'say', say: 'say', think: 'think', act: 'act', visitor: 'visitor', error: 'error', system: 'system', grow: 'grow', built: 'grow', land: 'grow', ticket: 'ticket', learn: 'grow', wish: 'grow' };
 
 export function createUI({ scene, api }) {
   let state = null;
@@ -259,7 +259,7 @@ export function createUI({ scene, api }) {
     el.className = `ev ${LOG_CLASS[e.kind] ?? ''}`;
     const who = e.koala ? state?.koalas.find((k) => k.id === e.koala) : null;
     el.style.setProperty('--c', e.kind === 'error' ? 'var(--red)' : e.kind === 'visitor' ? 'var(--mint)' : who?.color ?? 'var(--muted)');
-    el.textContent = e.kind === 'say' ? `${who?.name ?? ''}: “${e.text}”` : e.text;
+    el.textContent = e.kind === 'say' ? `${who?.name ?? ''}: “${e.text}”` : e.kind === 'reply' ? `${who?.name ?? ''} to you: “${e.text}”` : e.text;
     feed.prepend(el);
     while (feed.children.length > 5) feed.lastChild.remove();
     setTimeout(() => el.remove(), 14000);
@@ -401,7 +401,7 @@ export function createUI({ scene, api }) {
       const time = new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const head = e.kind === 'visitor' ? 'You' : k?.name ?? 'Grove';
       return `<div class="line ${LOG_CLASS[e.kind] ?? ''}" style="--c:${k?.color ?? 'var(--muted)'}">
-        <span class="t">${time}</span><b>${esc(head)}</b><span class="x">${esc(e.kind === 'say' ? `“${e.text}”` : e.text)}</span></div>`;
+        <span class="t">${time}</span><b>${esc(head)}</b><span class="x">${esc(e.kind === 'say' ? `“${e.text}”` : e.kind === 'reply' ? `to you: “${e.text}”` : e.text)}</span></div>`;
     }).join('') : '<p class="empty">Nothing has happened yet. Press Play and the koalas start deciding for themselves.</p>';
     if (atEnd) body.scrollTop = body.scrollHeight;
   }

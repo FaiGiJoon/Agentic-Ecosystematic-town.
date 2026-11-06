@@ -208,7 +208,7 @@ export function createDashboard({ api }) {
   function feedBox() {
     const name = (id) => state.koalas.find((k) => k.id === id)?.name ?? '';
     const rows = data?.feed ?? [...state.log].reverse();
-    $('#dash-feed').innerHTML = `<h3>Live feed</h3><ul class="dfeed">${rows.slice(0, 40).map((e) => `<li class="${esc(e.kind)}"><span class="t">${time(e.ts)}</span><b>${esc(name(e.koala))}</b><span class="k">${esc(e.kind)}</span><span class="x">${esc(e.kind === 'say' ? `“${e.text}”` : e.text)}</span></li>`).join('')}</ul>`;
+    $('#dash-feed').innerHTML = `<h3>Live feed</h3><ul class="dfeed">${rows.slice(0, 40).map((e) => `<li class="${esc(e.kind)}"><span class="t">${time(e.ts)}</span><b>${esc(name(e.koala))}</b><span class="k">${esc(e.kind)}</span><span class="x">${esc(e.kind === 'say' ? `“${e.text}”` : e.kind === 'reply' ? `to you: “${e.text}”` : e.text)}</span></li>`).join('')}</ul>`;
   }
 
   function draw() {
