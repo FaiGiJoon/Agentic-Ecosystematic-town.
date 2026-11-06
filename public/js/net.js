@@ -29,6 +29,7 @@ export const groveApi = {
   dashboard: () => request('/api/dashboard'),
   exportSheets: () => post('/api/google/export'),
   disconnectGoogle: () => post('/api/google/disconnect'),
+  googleClient: (client) => post('/api/google/client', { client }),
 };
 
 // EventSource reconnects by itself; every (re)connect reloads the full grove state.

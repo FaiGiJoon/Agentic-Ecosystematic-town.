@@ -148,6 +148,15 @@ export function createApp({ grove, publicDir, google = null }) {
         throw err;
       }
     }
+    if (pathname === '/api/google/client' && method === 'POST') {
+      const { client } = await readJson(req);
+      try {
+        return sendJson(res, 200, google.saveClient(client));
+      } catch (err) {
+        if (err.status) return sendJson(res, err.status, { error: err.message });
+        throw err;
+      }
+    }
     if (pathname === '/api/google/disconnect' && method === 'POST') {
       await google.disconnect();
       return sendJson(res, 200, google.status());

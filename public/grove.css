@@ -378,3 +378,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .dfeed li.error .x { color: var(--red); }
 .dfeed li.learn .x, .dfeed li.grow .x { color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { #dash { backdrop-filter: none; } }
+.dfile { display: inline-block; padding: 2px 10px; border-radius: 8px; background: var(--mint); color: var(--mint-ink); font-weight: 700; cursor: pointer; }
+#dash-client-msg { color: var(--orange); font: 400 12px var(--mono); }

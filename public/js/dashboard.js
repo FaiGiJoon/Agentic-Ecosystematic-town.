@@ -32,7 +32,6 @@ export function createDashboard({ api }) {
   let data = null;
   let timer = null;
   let exporting = false;
-  let showSetup = false;
 
   const isOpen = () => !root.hidden;
   function open() {
@@ -65,7 +64,7 @@ export function createDashboard({ api }) {
   // --- export ---------------------------------------------------------------------------
   $('#dash-export').addEventListener('click', async () => {
     const g = data?.google;
-    if (!g?.configured) { showSetup = true; return draw(); }
+    if (!g?.configured) { setupShown(true); return; }
     if (!g.connected || g.needsReconnect) return window.open('/api/google/connect', '_blank', 'noopener');
     if (exporting) return;
     exporting = true;
@@ -95,13 +94,40 @@ export function createDashboard({ api }) {
   function setupHelp() {
     return `<h3>Set up Google Sheets once</h3>
       <ol class="dsetup">
-        <li>In <b>Google Cloud Console</b>, create a project and enable the <b>Google Sheets API</b>.</li>
-        <li>Set up the <b>OAuth consent screen</b> (External) and <b>publish it to In production</b>, so the sign-in does not expire after 7 days.</li>
-        <li>Create an <b>OAuth client ID</b> of type <b>Desktop app</b> and download its JSON.</li>
-        <li>Save it as <code>data/google-client.json</code> in the grove folder, then restart the server.</li>
-        <li>Press <b>Connect Google</b> here and approve. Google shows an "unverified app" warning once: that is your own app.</li>
+        <li>In <b>Google Cloud Console</b> (console.cloud.google.com), create a project and enable the <b>Google Sheets API</b>.</li>
+        <li>Under <b>Google Auth Platform</b>, set up the consent screen (External) and <b>publish it to In production</b>, so the sign-in does not expire after 7 days.</li>
+        <li>Under <b>Clients</b>, create an OAuth client of type <b>Desktop app</b> and download its JSON.</li>
+        <li>Choose that file here: <label class="dfile">Choose client file<input type="file" id="dash-client" accept=".json,application/json" hidden></label> <span id="dash-client-msg"></span></li>
+        <li>Press <b>Connect Google</b> and approve. Google shows an "unverified app" warning once: that is your own app.</li>
       </ol>`;
   }
+
+  // Drawn once when shown, not on every redraw, so the file picker is never swapped out from under you.
+  function setupShown(on) {
+    const box = $('#dash-setup');
+    if (on && box.hidden) box.innerHTML = setupHelp();
+    box.hidden = !on;
+    if (on) box.scrollIntoView({ block: 'nearest' });
+  }
+
+  // The client file is read in the page and sent to this computer's own server, nowhere else.
+  document.addEventListener('change', async (e) => {
+    if (e.target.id !== 'dash-client') return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const msg = $('#dash-client-msg');
+    try {
+      if (file.size > 8000) throw new Error('That file is too big to be an OAuth client file.');
+      let client;
+      try { client = JSON.parse(await file.text()); } catch { throw new Error('That file is not JSON.'); }
+      await api.googleClient(client);
+      setupShown(false);
+      await refresh();
+      $('#dash-sub').textContent = 'Client saved. Now press Connect Google.';
+    } catch (err) {
+      if (msg) msg.textContent = err.message;
+    }
+  });
 
   function googleLine() {
     const g = data?.google;
@@ -176,7 +202,7 @@ export function createDashboard({ api }) {
     const p = data?.problems ?? [];
     $('#dash-problems').innerHTML = `<h3>Problems</h3>${p.length
       ? `<ul class="dlist">${p.map((x) => `<li class="${x.level}"><span class="dlight ${x.level}">${LIGHT[x.level]}</span> ${time(x.ts)} ${esc(x.text)}</li>`).join('')}</ul>`
-      : '<div class="dline">All quiet. No problems.</div>'}${showSetup && !data?.google?.configured ? setupHelp() : ''}`;
+      : '<div class="dline">All quiet. No problems.</div>'}`;
   }
 
   function feedBox() {

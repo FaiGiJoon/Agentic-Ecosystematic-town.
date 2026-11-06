@@ -285,3 +285,40 @@ test('http: dashboard, setup page, bad callback, and export through a mocked Goo
   }
   grove.close();
 });
+
+test('google: the dashboard can hand over a Desktop client file, kept private; other files are refused', async () => {
+  const dir = tmpDir();
+  const g = new Google({ dataDir: dir, fetch: fakeGoogle().fetch, env: {} });
+  assert.throws(() => g.saveClient({ web: { client_id: 'x.apps.googleusercontent.com', client_secret: 's' } }), /Desktop app/);
+  assert.throws(() => g.saveClient({ hello: 1 }), /not an OAuth client file/);
+  assert.throws(() => g.saveClient({ installed: { client_id: 'evil.example.com', client_secret: 's' } }), /client_id/);
+  assert.equal(g.status().configured, false);
+  const s = g.saveClient({ installed: { client_id: '123-abc.apps.googleusercontent.com', client_secret: 'GOCSPX-x', project_id: 'p', redirect_uris: ['http://localhost'] } });
+  assert.equal(s.configured, true);
+  const file = path.join(dir, 'google-client.json');
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { installed: { client_id: '123-abc.apps.googleusercontent.com', client_secret: 'GOCSPX-x' } });
+  assert.match(g.authUrl('http://127.0.0.1:1/cb'), /client_id=123-abc\.apps\.googleusercontent\.com/, 'usable at once, no restart');
+});
+
+test('http: POST /api/google/client saves the file and refuses bad ones and other sites', async () => {
+  const dir = tmpDir();
+  const pub = tmpDir();
+  fs.writeFileSync(path.join(pub, 'index.html'), 'x');
+  const grove = new Grove({ think: async () => ({ ok: true, raw: { action: 'sit' } }) });
+  const server = createApp({ grove, publicDir: pub, google: new Google({ dataDir: dir, fetch: fakeGoogle().fetch, env: {} }) });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const send = (client, headers = {}) => fetch(`${base}/api/google/client`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ client }) });
+  assert.equal((await send({ web: {} })).status, 400);
+  assert.equal((await send({ installed: { client_id: '1-a.apps.googleusercontent.com', client_secret: 's' } }, { origin: 'https://evil.example' })).status, 403);
+  assert.equal(fs.existsSync(path.join(dir, 'google-client.json')), false);
+  const ok = await send({ installed: { client_id: '1-a.apps.googleusercontent.com', client_secret: 's' } });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).configured, true);
+  const d = await (await fetch(`${base}/api/dashboard`)).json();
+  assert.equal(d.google.configured, true);
+  server.closeAllConnections?.();
+  await new Promise((r) => server.close(r));
+  grove.close();
+});

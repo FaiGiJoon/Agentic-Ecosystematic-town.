@@ -35,6 +35,18 @@ export function loadClient(dataDir, env = process.env) {
   return null;
 }
 
+// The client JSON as Google offers it for a Desktop app: { installed: { client_id, client_secret, ... } }.
+export function checkClient(raw) {
+  const c = raw && typeof raw === 'object' ? raw.installed : null;
+  if (!c) {
+    if (raw && typeof raw === 'object' && raw.web) throw new GoogleError(400, 'That is a "Web application" client. Make an OAuth client of type "Desktop app" instead.');
+    throw new GoogleError(400, 'That is not an OAuth client file. Download the JSON of a "Desktop app" OAuth client from Google Cloud Console.');
+  }
+  if (typeof c.client_id !== 'string' || !/^[\w.-]+\.apps\.googleusercontent\.com$/.test(c.client_id)) throw new GoogleError(400, 'The file has no valid client_id.');
+  if (typeof c.client_secret !== 'string' || !c.client_secret || c.client_secret.length > 200) throw new GoogleError(400, 'The file has no valid client_secret.');
+  return { installed: { client_id: c.client_id, client_secret: c.client_secret } };
+}
+
 export class Google {
   #pending = new Map(); // state -> { verifier, redirect, at }
 
@@ -59,6 +71,16 @@ export class Google {
     fs.mkdirSync(this.dataDir, { recursive: true });
     fs.writeFileSync(this.tokenFile, JSON.stringify(t), { mode: 0o600 });
     fs.chmodSync(this.tokenFile, 0o600);
+  }
+
+  // The owner hands over the client file on the dashboard; it is kept beside the token, private.
+  saveClient(raw) {
+    const clean = checkClient(raw);
+    fs.mkdirSync(this.dataDir, { recursive: true });
+    const file = path.join(this.dataDir, 'google-client.json');
+    fs.writeFileSync(file, JSON.stringify(clean), { mode: 0o600 });
+    fs.chmodSync(file, 0o600);
+    return this.status();
   }
 
   status() {
