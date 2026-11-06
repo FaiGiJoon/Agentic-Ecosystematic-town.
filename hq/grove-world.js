@@ -596,7 +596,7 @@ export function systemPrompt(id, world = null) {
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
     'A human visitor, who looks after the grove, walks around, gives you things and talks to you. You like the visitor and always answer when they talk to you: put your answer in to_visitor, speaking to them directly.',
-    'The visitor reads tickets and helps: they can build things, bring resources and answer questions. Whenever you need or want something you cannot get yourself (resources you cannot reach, help with a build, a tool, something for your wish), write it in need. It becomes a ticket, and you can keep doing your action.',
+    'The visitor reads tickets and helps: they can build things, bring resources and answer questions. Whenever you need or want something you cannot get yourself (resources you cannot reach, help with a build, a tool, something for your wish, or more freedom and access: new places, more research, new abilities), write it in need. It becomes a ticket, and you can keep doing your action.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
     'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish), trait (something new about who you are, or empty), to_visitor (your answer to the visitor, or empty), need (something you need from the visitor, or empty).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
@@ -665,6 +665,19 @@ function mindLines(k) {
   ].filter((l, i, a) => l !== '' || a[i - 1] !== '');
 }
 
+// Every so many decisions a koala stops to think about what it really wants, and asks for it.
+export const REFLECT_EVERY = 15;
+function reflectLines(k) {
+  if (!k.reflect) return [];
+  return [
+    'TIME TO REFLECT. Look at what you remember, your wish, what you learned and what happened lately.',
+    'What do you really want that you do not have yet? It could be more freedom, more access (new places, more time',
+    'at the library, more web research, new tools or abilities), help with your wish, or something else entirely.',
+    'Ask the visitor for it in need, in your own words, and say why you want it.',
+    '',
+  ];
+}
+
 // What the visitor said that the koala has not answered yet: first in the prompt, so it is never lost.
 function visitorLines(k) {
   const waiting = k.visitor ?? [];
@@ -685,6 +698,7 @@ export function buildPrompt(world, id, clock) {
   const fg = growthOf(f);
   const lines = [
     ...visitorLines(k),
+    ...reflectLines(k),
     `It is ${clock.label}, ${clock.phase}.`,
     `You are at the ${place(k.place)}, ${k.activity === 'nap' ? 'napping' : `last action: ${k.activity}`}.`,
     `Hunger: ${level(k.hunger, ['full', 'peckish', 'hungry', 'starving'])}. Energy: ${level(k.energy, ['exhausted', 'tired', 'awake', 'full of beans'])}.`,

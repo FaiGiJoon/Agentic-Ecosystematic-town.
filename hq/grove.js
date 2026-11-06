@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
   KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, canReadAt, growthOf, carryLimit,
-  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES,
+  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES, REFLECT_EVERY,
 } from './grove-world.js';
 import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
@@ -448,6 +448,21 @@ export class Grove {
     this.world.tickets = this.tickets.list();
   }
 
+  // A koala's wish is what it really wants: the visitor gets a ticket for it, and a new one when it changes.
+  #wishTicket(id) {
+    const k = this.world.koalas[id];
+    if (!k.wish || k.wishTicketed === k.wish) return;
+    const old = k.wishTicketId ? this.tickets.get(k.wishTicketId) : null;
+    if (old && old.status === 'open') this.tickets.close(old.id);
+    if (this.tickets.openCount(id) >= MAX_OPEN_TICKETS) return; // tried again after the next decision
+    const t = this.tickets.open(id, `My wish: ${k.wish}`);
+    k.wishTicketed = k.wish;
+    k.wishTicketId = t.id;
+    k.recent.push('You told the visitor your wish in a ticket.');
+    this.#log({ koala: id, kind: 'ticket', text: `${k.name} filed a ticket: ${t.title}` });
+    this.world.tickets = this.tickets.list();
+  }
+
   replyTicket(ticketId, text) {
     const t = this.tickets.get(ticketId);
     if (!t) throw new GroveError(404, 'no such ticket');
@@ -516,6 +531,8 @@ export class Grove {
     r.thinking = true;
     r.replyDue = false;
     r.lastStart = this.now();
+    const kk = this.world.koalas[id];
+    kk.reflect = (kk.decisions ?? 0) > 0 && kk.decisions % REFLECT_EVERY === 0;
     const req = {
       koala: id,
       system: systemPrompt(id, this.world),
@@ -553,6 +570,8 @@ export class Grove {
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
     const me = this.world.koalas[id];
+    me.decisions = (me.decisions ?? 0) + 1;
+    me.reflect = false;
     if (decision.toVisitor) {
       this.#log({ koala: id, kind: 'reply', text: decision.toVisitor });
       me.recent.push(`You said to the visitor: "${decision.toVisitor}"`);
@@ -575,6 +594,7 @@ export class Grove {
     }
     this.world.minute = this.#minute();
     for (const entry of applyDecision(this.world, id, decision)) this.#log(entry);
+    this.#wishTicket(id);
     this.#setMeta('baby', this.world.baby ?? null);
     this.#setMeta('nest', this.world.nest ?? null);
     // babies go wherever the parent they follow goes

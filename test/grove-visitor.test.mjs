@@ -110,3 +110,37 @@ test('a ticket answer is pinned too, and the koala answers it', async () => {
   assert.match(p, /THE VISITOR IS TALKING TO YOU[^]*answered your ticket "More wood": "I put 5 wood in the Stockpile"/);
   assert.equal(grove.state().log.filter((e) => e.kind === 'reply').at(-1).text, 'Thank you so much!');
 });
+
+test('a wish becomes a ticket, and a new wish replaces the old one', async () => {
+  let wish = 'Build a tall star-watching tower at Lookout Rock';
+  const { grove, step } = setup((k) => (k === 'crystal' ? { wish } : {}));
+  grove.play();
+  await step(5000);
+  const mine = () => grove.state().tickets.filter((t) => t.koala === 'crystal');
+  assert.deepEqual(mine().map((t) => t.text), ['My wish: Build a tall star-watching tower at Lookout Rock']);
+  await step();
+  assert.equal(mine().length, 1, 'the same wish is filed once');
+  wish = 'Sail to a faraway island';
+  await step();
+  assert.deepEqual(mine().map((t) => [t.text, t.status]), [['My wish: Sail to a faraway island', 'open']], 'the old wish ticket is closed');
+});
+
+test('a wish already held before this change is filed on the next decision', async () => {
+  const { grove, step } = setup(() => ({}));
+  grove.world.koalas.ruby.wish = 'Sleep high in a gum tree and watch the moon rise';
+  grove.play();
+  await step(5000);
+  assert.ok(grove.state().tickets.some((t) => t.koala === 'ruby' && /moon rise/.test(t.text)));
+});
+
+test('every 15 decisions a koala reflects on what it really wants, and asks for it', async () => {
+  const { grove, calls, step } = setup((k, req) => (k === 'crystal' && /TIME TO REFLECT/.test(req.prompt) ? { need: 'More time at the library and more web searches' } : {}));
+  grove.play();
+  await step(5000);
+  for (let i = 0; i < 15; i++) await step();
+  const crystal = calls.filter((c) => c.koala === 'crystal');
+  const reflecting = crystal.map((c, i) => (/TIME TO REFLECT/.test(c.prompt) ? i : -1)).filter((i) => i >= 0);
+  assert.deepEqual(reflecting, [15], 'on the 16th call, after 15 decisions');
+  assert.match(crystal[15].prompt, /more freedom, more access/);
+  assert.ok(grove.state().tickets.some((t) => t.koala === 'crystal' && /more web searches/.test(t.text)));
+});

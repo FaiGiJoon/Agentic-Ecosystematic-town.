@@ -70,6 +70,11 @@ then a new trait they have noticed about themselves.
   without the koala giving up what it was doing. The same need is not filed twice, and each koala
   has at most 3 waiting. Answer in the **Tickets** tab; the koala sees your answer first thing and
   thanks you or reacts.
+- **What they really want.** A koala's wish (shown as "Wants" on the dashboard) becomes a ticket
+  too, and a new wish replaces the old ticket. Every 15 decisions a koala also stops to reflect on
+  its memories, wish and what it learned, and asks you for what it really wants: more freedom,
+  more access (new places, more library time, more web research, new abilities), or anything else.
+  That happens inside its normal decision, so it costs nothing extra.
 
 ## Getting smarter
 
