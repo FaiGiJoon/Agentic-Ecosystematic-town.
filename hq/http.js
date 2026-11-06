@@ -67,7 +67,7 @@ function readJson(req) {
 }
 
 // The grove server: its API, the live event stream and the page. Localhost only.
-export function createApp({ grove, publicDir }) {
+export function createApp({ grove, publicDir, google = null }) {
   const root = path.resolve(publicDir);
   const clients = new Set();
 
@@ -102,14 +102,68 @@ export function createApp({ grove, publicDir }) {
     }
   }
 
+  // A small page for the browser tab Google sends back to.
+  function page(res, status, title, text) {
+    const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const body = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}</title>`
+      + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"></head>`
+      + `<body style="font:16px system-ui;background:#0f1520;color:#e8eef5;display:grid;place-items:center;min-height:90vh;text-align:center">`
+      + `<div><h1 style="font-size:20px">${esc(title)}</h1><p>${esc(text)}</p></div></body></html>`;
+    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' });
+    res.end(body);
+  }
+
+  // The owner's dashboard and the Google Sheets export. Tokens stay on the server.
+  async function owner(req, res, pathname, query, port) {
+    const method = req.method;
+    if (pathname === '/api/dashboard' && method === 'GET') {
+      return sendJson(res, 200, { ...grove.dashboard(), google: google ? google.status() : { configured: false, connected: false } });
+    }
+    if (!pathname.startsWith('/api/google/')) return false;
+    if (!google) throw new HttpError(404, 'not found');
+    const redirect = `http://127.0.0.1:${port}/api/google/callback`;
+    if (pathname === '/api/google/connect' && method === 'GET') {
+      let url;
+      try { url = google.authUrl(redirect); } catch (err) { return page(res, 409, 'Google is not set up yet', err.message); }
+      res.writeHead(302, { Location: url, 'Cache-Control': 'no-store' });
+      return res.end();
+    }
+    if (pathname === '/api/google/callback' && method === 'GET') {
+      try {
+        await google.callback({ code: query.get('code'), state: query.get('state'), error: query.get('error') });
+      } catch (err) {
+        return page(res, err.status ?? 500, 'Google was not connected', err.message);
+      }
+      return page(res, 200, 'Google connected', 'You can close this tab and press Export to Google Sheets on the dashboard.');
+    }
+    if (pathname === '/api/google/export' && method === 'POST') {
+      const d = new Date(grove.now());
+      const two = (n) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+      try {
+        const sheet = await google.createSpreadsheet(`Koala Grove export ${stamp}`, grove.exportData());
+        return sendJson(res, 200, sheet);
+      } catch (err) {
+        if (err.status) return sendJson(res, err.status, { error: err.message, code: err.code ?? null });
+        throw err;
+      }
+    }
+    if (pathname === '/api/google/disconnect' && method === 'POST') {
+      await google.disconnect();
+      return sendJson(res, 200, google.status());
+    }
+    throw new HttpError(404, 'not found');
+  }
+
   // State, Play/Pause, the clock, the page's heartbeat, and the visitor's actions.
-  async function api(req, res, pathname) {
+  async function api(req, res, pathname, query = new URLSearchParams(), port = 0) {
     const method = req.method;
     if (method !== 'GET' && method !== 'HEAD') {
       const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (type !== 'application/json') throw new HttpError(415, 'content-type must be application/json');
     }
     if (pathname === '/api/events' && method === 'GET') return sse(req, res);
+    if (pathname === '/api/dashboard' || pathname.startsWith('/api/google/')) return owner(req, res, pathname, query, port);
     if (pathname === '/api/grove' && method === 'GET') return sendJson(res, 200, grove.state());
     if (method === 'POST') {
       if (pathname === '/api/grove/play') return sendJson(res, 200, grove.play());
@@ -172,8 +226,10 @@ export function createApp({ grove, publicDir }) {
       if (origin !== undefined && origin !== `http://127.0.0.1:${port}` && origin !== `http://localhost:${port}`) {
         throw new HttpError(403, 'forbidden origin');
       }
-      const rawPath = (req.url || '/').split('?')[0].split('#')[0];
-      if (rawPath === '/api' || rawPath.startsWith('/api/')) await api(req, res, rawPath);
+      const rawUrl = (req.url || '/').split('#')[0];
+      const rawPath = rawUrl.split('?')[0];
+      const query = new URLSearchParams(rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?') + 1) : '');
+      if (rawPath === '/api' || rawPath.startsWith('/api/')) await api(req, res, rawPath, query, port);
       else await serveStatic(req, res, rawPath);
     } catch (err) {
       if (res.headersSent) return res.end();

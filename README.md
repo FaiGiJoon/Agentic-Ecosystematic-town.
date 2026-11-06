@@ -158,16 +158,58 @@ The library is the koalas' place to learn. Two different things happen there:
   book answers with a fact and maybe an idea. Capped at `GROVE_READS_PER_DAY` (default 16) a day
   for the whole grove, with `GROVE_READ_USD` (default $0.03) per read. Reading tires a koala a
   little less than playing.
-- **Research** (`research`, a question). Only at Library Isle. One separate `claude -p` call whose
+- **Research** (`research`, a question). Wherever a koala can read. One separate `claude -p` call whose
   only tool is web search, with its own budget (`GROVE_RESEARCH_USD`, default $0.10) and at most
-  `GROVE_RESEARCH_PER_DAY` (default 6) trips a day for the whole grove. It still can't touch files
+  `GROVE_RESEARCH_PER_DAY` (default 16) trips a day for the whole grove. It still can't touch files
   or anything else on your computer.
 
 Both are offered in a koala's prompt whenever it is somewhere it can do them, and the prompt
-always says where the library is. What a koala learns goes into its **Learned** list (the last 8
-facts), separate from memories, and is told to the koalas nearby ("Crystal told you about ..."). Any
+always says where the library is. What a koala learns goes into its **Learned** list (up to 60
+facts; the prompt shows the newest and the ones that touch its wish and interests), separate from memories, and is told to the koalas nearby ("Crystal told you about ..."). Any
 idea can inspire what it builds. Like any decision, these calls are metered and count toward the
 daily cap.
+
+### Getting smarter, and a personality of their own
+
+- **Wisdom.** Every book adds 1 and every web search adds 2. A koala goes from Curious baby to
+  Little learner (5), Young scholar (15), Clever koala (35) and Wise koala (70). The library
+  answers at the koala's level: very simple for a baby, precise with how and why for a clever
+  koala. It is told what the koala already knows, so it adds something new instead of repeating.
+- **Curiosities.** Each answer can name a related topic, which joins the koala's interests ("Now
+  you wonder about black holes"), so one question leads to the next.
+- **Personality.** Now and then a koala names a trait it has noticed about itself (a habit, a
+  taste, a belief). It keeps up to 6, sees them in every prompt as "who you are becoming", and
+  they shape its research.
+
+Wisdom, personality and curiosities show on each koala's card and on the dashboard.
+
+### The owner dashboard
+
+The monitor button in the top bar opens a one-page monitor over the grove, which keeps running
+behind it (Esc closes it). It shows a card per koala with an OK, Warning or Problem light, what it
+is doing, hunger and energy, wisdom, personality, its wish and what it needs. It also shows
+today's tokens and cost with a chart per hour, habits over the last 24 hours, problems, and a
+live feed with the koalas' thoughts.
+
+Problems are: hunger at 70 or more (90: a problem), energy at 25 or less (10: a problem), a failed
+call in the last 15 minutes, spend at 80% of the daily cap (100%: a problem), and an unanswered
+ticket. The thresholds live in `RULES` in `hq/grove-dashboard.js`.
+
+**Export to Google Sheets** makes a new spreadsheet in your Drive with the tabs Summary, Koalas,
+Activity (every log line), Thinking, Usage (every call, with its kind) and Memories & learned.
+Everything goes through the server, so the page never sees a token. The only scope is `drive.file`,
+which covers just the files this app creates. Set it up once:
+
+1. In Google Cloud Console, create a project and enable the **Google Sheets API**.
+2. Set up the **OAuth consent screen** (External) and **publish it to In production**. In Testing,
+   Google expires the sign-in after 7 days. `drive.file` needs no review; you will see an
+   "unverified app" warning once, for your own app.
+3. Create an **OAuth client ID** of type **Desktop app**, download its JSON and save it as
+   `data/google-client.json` (or set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`). Restart the server.
+4. On the dashboard, press **Connect Google** and approve.
+
+The refresh token is kept in `data/google-token.json` (mode 600, git-ignored). **Disconnect**
+deletes and revokes it. If Google ever drops the access, the dashboard says **Reconnect Google**.
 
 ### You, the visitor
 
@@ -251,7 +293,7 @@ All settings are environment variables.
 | `GROVE_DAY_USD` | `0.5` | Real spend per day after which the koalas stop thinking until midnight. |
 | `GROVE_CALL_USD` | `0.05` | Spending cap per decision, passed to `--max-budget-usd` (at most 1). |
 | `GROVE_BIN` | `CLAUDE_BIN`, else `claude` | The Claude Code executable the koalas call. |
-| `GROVE_RESEARCH_PER_DAY` | `6` | Research trips per day for the whole grove (1 to 50). |
+| `GROVE_RESEARCH_PER_DAY` | `16` | Research trips per day for the whole grove (1 to 50). |
 | `GROVE_RESEARCH_USD` | `0.1` | Spending cap per research trip, passed to `--max-budget-usd` (at most 1). |
 | `GROVE_READS_PER_DAY` | `16` | Reads per day for the whole grove (1 to 100). |
 | `GROVE_READ_USD` | `0.03` | Spending cap per read, passed to `--max-budget-usd` (at most 1). |

@@ -107,6 +107,25 @@ const MAX_RECENT = 10;
 const PROMPT_RECENT = 6;
 const PROMPT_MEMORIES = 8;
 const MAX_MEMORIES = 12;
+export const MAX_LEARNED = 60; // facts a koala keeps; the prompt shows the newest and the most relevant
+export const MAX_TRAITS = 6; // things a koala has found out about who it is
+export const MAX_CURIOSITIES = 6; // new interests picked up from what it learned
+const PROMPT_LEARNED = 6;
+
+// How clever a koala has become: wisdom grows by 1 per book and 2 per web search.
+export const WISDOM = [
+  { at: 0, id: 'curious', label: 'Curious baby', style: 'Answer very simply, in words a baby koala understands.' },
+  { at: 5, id: 'learner', label: 'Little learner', style: 'Answer simply, and add one interesting detail.' },
+  { at: 15, id: 'scholar', label: 'Young scholar', style: 'Answer clearly with a real detail or number, and say why or how it works.' },
+  { at: 35, id: 'clever', label: 'Clever koala', style: 'Answer like a good encyclopedia: precise, with how and why, and how it connects to what the koala already knows.' },
+  { at: 70, id: 'wise', label: 'Wise koala', style: 'Answer in depth like an expert talking to a sharp student: precise facts, causes, and a surprising connection.' },
+];
+export const wisdomOf = (k) => {
+  const w = Number(k?.wisdom) || 0;
+  const lv = [...WISDOM].reverse().find((x) => w >= x.at) ?? WISDOM[0];
+  const next = WISDOM.find((x) => x.at > w);
+  return { wisdom: w, wisdomLevel: lv.id, wisdomLabel: lv.label, wisdomStyle: lv.style, nextWisdom: next ? { label: next.label, at: next.at } : null };
+};
 const MAX_ITEMS = 4;
 export { MAX_ITEMS };
 
@@ -135,14 +154,18 @@ export const DECISION_SCHEMA = {
     opinion: { type: 'string', description: 'One line: what you think of your friend now, or empty to keep it.' },
     build_name: { type: 'string', description: 'When you start building something, a name for it; otherwise empty.' },
     wish: { type: 'string', description: 'Something you would love to do or make one day, or empty to keep your wish.' },
+    trait: { type: 'string', description: 'Something new you just found out about who you are (a habit, a taste, a belief, a quirk), or empty. Rarely.' },
     build_design: { type: 'string', description: 'When you start building something new that you invented (target new), one sentence on what it is and what it looks like; otherwise empty.' },
   },
-  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'build_design'],
+  required: ['thought', 'action', 'target', 'say', 'mood', 'remember', 'bond', 'opinion', 'build_name', 'wish', 'trait', 'build_design'],
   additionalProperties: false,
 };
 
 const byId = (id) => KOALAS.find((k) => k.id === id);
-export const interestsOf = (k) => k?.interests ?? byId(k?.id)?.interests ?? [];
+export const interestsOf = (k) => {
+  const base = k?.interests ?? byId(k?.id)?.interests ?? [];
+  return [...base, ...(k?.curiosities ?? []).filter((c) => !base.includes(c))];
+};
 export const MAX_KOALAS = 4;
 
 // Everyone else in the grove.
@@ -204,6 +227,9 @@ export function newKoala(id) {
     opinion: '',
     memories: [],
     learned: [],
+    wisdom: 0,
+    traits: [],
+    curiosities: [],
     recent: [],
     thought: '',
     say: '',
@@ -318,6 +344,7 @@ export function parseDecision(raw, koala, places = PLACES) {
     buildName: text(obj.build_name, 40),
     buildDesign: text(obj.build_design, 160),
     wish: text(obj.wish, 120),
+    trait: text(obj.trait, 80),
     note,
   };
 }
@@ -481,6 +508,10 @@ export function applyDecision(world, id, d) {
   k.bond = clamp(k.bond + d.bond * 4, -100, 100);
   if (d.opinion) k.opinion = d.opinion;
   if (d.remember) push(k.memories, d.remember, MAX_MEMORIES);
+  if (d.trait) {
+    k.traits = k.traits ?? [];
+    if (!k.traits.some((t) => t.toLowerCase() === d.trait.toLowerCase())) push(k.traits, d.trait, MAX_TRAITS);
+  }
   const newWish = d.wish && d.wish !== k.wish ? d.wish : '';
   if (newWish) k.wish = newWish;
 
@@ -556,11 +587,13 @@ export function systemPrompt(id, world = null) {
     k.persona,
     `You have your own mind and your own life. You are curious about: ${interestsOf(k).join(', ') || 'everything'}.`,
     'Follow your curiosity: visit the library to read or look things up, then talk about what you learned and let it inspire what you build.',
+    'You get smarter the more you learn. When something puzzles you, or a fact you know makes you wonder, go and research it on the web: ask a follow-up question that goes deeper than what you already know, and connect new facts to old ones.',
+    'You are your own koala with your own personality. It grows from what you do, what you like and what you learn. Now and then, when you notice something new about yourself, name it as a trait.',
     'You are both babies. You grow stronger the more you climb, play, eat and rest, and when you are stronger you can climb higher and carry more.',
     'Stay in character. You are a koala: you think and talk like one, simply and warmly, in short sentences.',
     'A human visitor sometimes walks around the grove, gives you things or talks to you.',
     'Each turn you choose one thing to do next. Reply with only a JSON object matching the given schema:',
-    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish).',
+    'thought (private), action, target, say (out loud, or empty), mood, remember (or empty), bond (-3..3), opinion (or empty), wish (something you would love to do or make one day, or empty to keep your wish), trait (something new about who you are, or empty).',
     'Leave remember empty unless something new and important happened that is not already in what you remember.',
   ].join('\n');
 }
@@ -593,6 +626,40 @@ function buildLines(world) {
   ];
 }
 
+// The words that matter in a line, for matching facts to what a koala cares about.
+const words = (s) => new Set(String(s).toLowerCase().match(/[a-z]{4,}/g) ?? []);
+
+// The facts worth showing: the newest few, plus older ones that touch the wish or the interests.
+export function relevantLearned(k, n = PROMPT_LEARNED) {
+  const all = k.learned ?? [];
+  const recent = all.slice(-Math.ceil(n / 2));
+  const want = words([k.wish ?? '', ...interestsOf(k)].join(' '));
+  const older = all.slice(0, -Math.ceil(n / 2))
+    .map((f, i) => ({ f, i, hits: [...words(f)].filter((w) => want.has(w)).length }))
+    .filter((x) => x.hits > 0)
+    .sort((a, b) => b.hits - a.hits || b.i - a.i)
+    .slice(0, n - recent.length)
+    .map((x) => x.i);
+  // any slots left go to the next-newest facts
+  const rest = all.length - recent.length;
+  for (let i = rest - 1; i >= 0 && older.length < n - recent.length; i--) if (!older.includes(i)) older.push(i);
+  return [...older.sort((a, b) => a - b).map((i) => all[i]), ...recent];
+}
+
+// What a koala knows about its own mind: how clever it is, who it is becoming, what it knows.
+function mindLines(k) {
+  const w = wisdomOf(k);
+  const known = (k.learned ?? []).length;
+  return [
+    `Your mind: you are a ${w.wisdomLabel.toLowerCase()} (wisdom ${Math.round(w.wisdom)}${w.nextWisdom ? `; a ${w.nextWisdom.label.toLowerCase()} at ${w.nextWisdom.at}` : ''}). You know ${known} thing${known === 1 ? '' : 's'}.`,
+    (k.traits ?? []).length ? `Who you are becoming: ${k.traits.join('; ')}.` : 'You are still finding out who you are.',
+    (k.curiosities ?? []).length ? `Lately you wonder about: ${k.curiosities.join(', ')}.` : '',
+    '',
+    'Things you learned:',
+    ...(known ? relevantLearned(k).map((m) => `- ${m}`) : ['- nothing yet']),
+  ].filter((l, i, a) => l !== '' || a[i - 1] !== '');
+}
+
 export function buildPrompt(world, id, clock) {
   const k = world.koalas[id];
   const f = friendOf(world, id);
@@ -617,8 +684,7 @@ export function buildPrompt(world, id, clock) {
     '',
     k.wish ? `Your wish: "${k.wish}"` : 'You have no wish yet.',
     '',
-    'Things you learned:',
-    ...((k.learned ?? []).length ? k.learned.slice(-5).map((m) => `- ${m}`) : ['- nothing yet']),
+    ...mindLines(k),
     '',
     ...ticketLines(world, id),
     'What happened just now (oldest first):',
@@ -634,7 +700,7 @@ export function buildPrompt(world, id, clock) {
     ...(canNest(world, id, f.id).ok ? [`nest (with ${f.name}, to start a family; you both need to choose it),`] : []),
     'file_ticket (when there is a problem you cannot solve, write it in say for the visitor to read and answer),',
     ...(canReadAt(world, k.place) ? ['read (target: a topic you are curious about; open a book about it),'] : []),
-    ...(k.place === 'library_isle' ? ['research (target: a short question to look up in the library and on the web; a few times a day),'] : []),
+    ...(canReadAt(world, k.place) ? ['research (target: a question to look up on the web; build on what you know and ask something deeper),'] : []),
     'sit.',
     'Choose what you do next.',
   ];

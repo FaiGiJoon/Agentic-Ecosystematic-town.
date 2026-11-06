@@ -334,7 +334,7 @@ test('read: costs energy like play, is described, and the prompt offers it and l
   assert.match(p, /The library is on Library Isle \(library_isle\), across the bridge from the grove/);
   assert.match(p, /read \(target: a topic/);
   assert.match(p, /research \(target/);
-  assert.match(p, /Things you learned:\n- c\n- d\n- e\n- f\n- g/);
+  assert.match(p, /Things you learned:\n- b\n- c\n- d\n- e\n- f\n- g/);
   w.koalas.ruby.place = 'pond';
   assert.doesNotMatch(buildPrompt(w, 'ruby', { label: 'x', phase: 'y' }), /read \(target/);
 });

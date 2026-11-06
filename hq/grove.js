@@ -7,12 +7,14 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
   KOALAS, ITEMS, BLUEPRINTS, PLOTS, LANDS, placesOf, landOf, newKoala, friendOf, RENAMED, migrateNames, SIGHTINGS, parseDecision, applyDecision, drift, groveClock, DAY_MS, buildPrompt, systemPrompt, canReadAt, growthOf, carryLimit,
+  wisdomOf, relevantLearned, interestsOf, MAX_LEARNED, MAX_CURIOSITIES,
 } from './grove-world.js';
 import { koalaArgs, researchArgs, readArgs, think as callClaude } from './grove-brain.js';
 import { RESOURCES, ISLANDS, COSTS, START_STOCK, held, bridged, stockOf } from './grove-economy.js';
 import { BABY_NAMES, babyPersona, bornBaby, graduates } from './grove-family.js';
 import { designCost } from './grove-design.js';
 import { Tickets, MAX_OPEN_TICKETS } from './grove-tickets.js';
+import { problemsOf, habitsOf, hourly, exportTabs, DAY_MS as DAY } from './grove-dashboard.js';
 
 export const GROVE_DEFAULTS = {
   model: 'claude-haiku-5-5',
@@ -32,7 +34,7 @@ export const GROVE_DEFAULTS = {
   presenceMs: 45000, // the page must check in this often
   tickMs: 1000,
   maxFailures: 3,
-  researchPerDay: 6,
+  researchPerDay: 16,
   readsPerDay: 16,
   readUsd: 0.03,
   researchUsd: 0.1,
@@ -84,6 +86,8 @@ export class Grove {
       CREATE INDEX IF NOT EXISTS grove_usage_ts ON grove_usage(ts);
       CREATE TABLE IF NOT EXISTS grove_meta (key TEXT PRIMARY KEY, value TEXT);
     `);
+    // Which kind of call a usage row was (decide, read, research): added later, empty on old rows.
+    if (!db.prepare('PRAGMA table_info(grove_usage)').all().some((c) => c.name === 'kind')) db.exec('ALTER TABLE grove_usage ADD COLUMN kind TEXT');
     const p = (sql) => db.prepare(sql);
     this.q = {
       koala: p('SELECT data FROM grove_koalas WHERE id = ?'),
@@ -91,7 +95,13 @@ export class Grove {
       saveKoala: p('INSERT INTO grove_koalas (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data'),
       log: p('INSERT INTO grove_log (ts, koala, kind, text, action, target) VALUES (?, ?, ?, ?, ?, ?)'),
       recentLog: p('SELECT * FROM grove_log ORDER BY id DESC LIMIT ?'),
-      usage: p('INSERT INTO grove_usage (ts, koala, ok, cost_usd, tokens_in, tokens_out, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      usage: p('INSERT INTO grove_usage (ts, koala, ok, cost_usd, tokens_in, tokens_out, duration_ms, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+      habits: p("SELECT koala, action, COUNT(*) AS n FROM grove_log WHERE kind = 'act' AND ts >= ? GROUP BY koala, action"),
+      usageSince: p('SELECT * FROM grove_usage WHERE ts >= ? ORDER BY id'),
+      allUsage: p('SELECT * FROM grove_usage ORDER BY id'),
+      allLog: p('SELECT * FROM grove_log ORDER BY id'),
+      failures: p("SELECT ts, koala, text FROM grove_log WHERE kind = 'error' AND ts >= ? ORDER BY id DESC"),
+      feed: p("SELECT * FROM grove_log WHERE kind IN ('think', 'act', 'say', 'learn', 'grow', 'error', 'ticket', 'remember') ORDER BY id DESC LIMIT ?"),
       sums: p(`SELECT koala, COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(tokens_in), 0) AS tokens_in,
         COALESCE(SUM(tokens_out), 0) AS tokens_out FROM grove_usage WHERE ts >= ? GROUP BY koala`),
       lastUsage: p('SELECT * FROM grove_usage ORDER BY id DESC LIMIT 1'),
@@ -305,8 +315,8 @@ export class Grove {
       k.recent.push('You wanted to look something up, but the library is closed: the grove has used its tokens for today.');
       return false;
     }
-    if (k.place !== 'library_isle') {
-      k.recent.push('You wanted to look something up, but you can research only at Library Isle.');
+    if (!canReadAt(this.world, k.place)) {
+      k.recent.push('You wanted to look something up, but you can research only at the library or somewhere with books.');
       return false;
     }
     const day = startOfDay(this.now());
@@ -344,9 +354,17 @@ export class Grove {
   // What comes back is kept in `learned` and told to koalas at the same place.
   async #learn(id, topic, { web }) {
     const k = this.world.koalas[id];
+    const w = wisdomOf(k);
+    const known = relevantLearned({ ...k, wish: `${k.wish ?? ''} ${topic}` }, 4);
+    const about = [
+      `${k.name} is a ${w.wisdomLabel.toLowerCase()} koala, curious about ${interestsOf(k).join(', ') || 'everything'}.`,
+      ...((k.traits ?? []).length ? [`${k.name}'s personality: ${k.traits.join('; ')}.`] : []),
+      ...(known.length ? [`${k.name} already knows:`, ...known.map((f) => `- ${f}`), 'Tell something new, that builds on this rather than repeating it.'] : []),
+      w.wisdomStyle,
+    ].join('\n');
     const prompt = web
-      ? `${k.name} the koala asks: ${topic}\nAnswer as a short fact a koala could remember, and one idea for the grove, or empty.`
-      : `${k.name} the koala opens a book about: ${topic}\nTell one true, simple thing about it as a short fact a koala could remember, and one idea for the grove, or empty.`;
+      ? `${k.name} the koala asks: ${topic}\n${about}\nAnswer as one fact the koala can remember, one idea for the grove (or empty), and one related topic the koala could wonder about next (or empty).`
+      : `${k.name} the koala opens a book about: ${topic}\n${about}\nTell one true thing about it as a fact the koala can remember, one idea for the grove (or empty), and one related topic the koala could wonder about next (or empty).`;
     const args = web
       ? researchArgs({ prompt, model: this.config.model, callUsd: this.config.researchUsd })
       : readArgs({ prompt, model: this.config.model, callUsd: this.config.readUsd });
@@ -361,16 +379,28 @@ export class Grove {
     if (typeof raw === 'string') {
       try { raw = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); } catch { raw = null; }
     }
-    const fact = typeof raw?.fact === 'string' ? raw.fact.trim().replace(/\s+/g, ' ').slice(0, 200) : '';
-    if (u) this.q.usage.run(this.now(), id, fact ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms);
+    const fact = typeof raw?.fact === 'string' ? raw.fact.trim().replace(/\s+/g, ' ').slice(0, 280) : '';
+    if (u) this.q.usage.run(this.now(), id, fact ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms, web ? 'research' : 'read');
     if (!out.ok || !fact) {
       this.#log({ koala: id, kind: 'error', text: `${k.name}'s ${web ? 'research' : 'reading'} found nothing: ${out.error ?? 'no answer'}` });
       return;
     }
     const idea = typeof raw.idea === 'string' ? raw.idea.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
-    k.learned = [...(k.learned ?? []), fact].slice(-8);
+    k.learned = [...(k.learned ?? []), fact].slice(-MAX_LEARNED);
     const trim = (x) => { if (x.recent.length > 10) x.recent.splice(0, x.recent.length - 10); };
     k.recent.push(`${web ? 'On the web you found out' : 'At the library you read'}: ${fact}${idea ? ` It gave you an idea: ${idea}` : ''}`);
+    const before = w.wisdomLabel;
+    k.wisdom = (Number(k.wisdom) || 0) + (web ? 2 : 1);
+    const after = wisdomOf(k).wisdomLabel;
+    if (after !== before) {
+      k.recent.push(`You feel wiser. You are a ${after.toLowerCase()} now!`);
+      this.#log({ koala: id, kind: 'grow', text: `${k.name} grew wiser: a ${after.toLowerCase()} now.` });
+    }
+    const next = typeof raw.curiosity === 'string' ? raw.curiosity.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
+    if (next && !interestsOf(k).some((c) => c.toLowerCase() === next.toLowerCase())) {
+      k.curiosities = [...(k.curiosities ?? []), next].slice(-MAX_CURIOSITIES);
+      k.recent.push(`Now you wonder about ${next}.`);
+    }
     trim(k);
     for (const o of this.#all()) {
       if (o.id === id || o.place !== k.place) continue;
@@ -488,7 +518,7 @@ export class Grove {
     const r = this.#run[id];
     const u = out.usage;
     const decision = out.ok ? parseDecision(out.raw, this.world.koalas[id], placesOf(this.world)) : null;
-    if (u) this.q.usage.run(this.now(), id, decision ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms);
+    if (u) this.q.usage.run(this.now(), id, decision ? 1 : 0, u.cost_usd, u.tokens_in, u.tokens_out, u.duration_ms, 'decide');
     if (!decision) {
       const why = out.ok ? 'Reply was not a decision' : out.error;
       this.#log({ koala: id, kind: 'error', text: `${this.world.koalas[id].name}'s call failed: ${why}` });
@@ -500,6 +530,8 @@ export class Grove {
     }
     this.#failures = 0;
     if (decision.thought) this.#log({ koala: id, kind: 'think', text: decision.thought });
+    // memories roll off the koala's own list, so the log keeps the full history for the export
+    if (decision.remember && !this.world.koalas[id].memories.includes(decision.remember)) this.#log({ koala: id, kind: 'remember', text: decision.remember });
     if (decision.action === 'file_ticket') this.#fileTicket(id, decision);
     let question = null;
     let topic = null;
@@ -651,6 +683,46 @@ export class Grove {
     return groveClock(this.now() - this.#meta('epoch', this.now()));
   }
 
+  // The owner's dashboard: problems, habits and usage over the last day, and the latest feed.
+  dashboard() {
+    const now = this.now();
+    const st = this.state();
+    const usage = this.q.usageSince.all(now - DAY);
+    const durations = usage.filter((u) => u.duration_ms != null);
+    const { problems, lights } = problemsOf({
+      koalas: st.koalas,
+      failures: this.q.failures.all(now - 15 * 60000),
+      spend: { today: st.usage.today.cost, cap: this.config.dayUsd },
+      tickets: st.tickets.map((t) => ({ ...t, ts: t.created })),
+      now,
+    });
+    const byKoala = {};
+    for (const u of usage) {
+      const b = (byKoala[u.koala] ??= { calls: 0, tokens: 0, cost: 0, failed: 0 });
+      b.calls += 1;
+      b.tokens += u.tokens_in + u.tokens_out;
+      b.cost += u.cost_usd;
+      if (!u.ok) b.failed += 1;
+    }
+    const kinds = {};
+    for (const u of usage) kinds[u.kind ?? 'decide'] = (kinds[u.kind ?? 'decide'] ?? 0) + 1;
+    return {
+      now,
+      problems,
+      lights,
+      habits: habitsOf(this.q.habits.all(now - DAY)),
+      hourly: hourly(usage, now),
+      last24: { byKoala, kinds, avgSeconds: durations.length ? durations.reduce((a, u) => a + u.duration_ms, 0) / durations.length / 1000 : null },
+      feed: this.q.feed.all(60),
+    };
+  }
+
+  // Everything recorded, for the Google Sheets export.
+  exportData() {
+    const st = this.state();
+    return exportTabs({ koalas: st.koalas, log: this.q.allLog.all(), usage: this.q.allUsage.all(), now: this.now(), model: this.config.model });
+  }
+
   state() {
     const now = this.now();
     const today = this.#sums(startOfDay(now));
@@ -678,6 +750,7 @@ export class Grove {
       koalas: this.#all().map((k) => ({
         ...k,
         ...growthOf(k),
+        ...wisdomOf(k),
         color: KOALAS.find((f) => f.id === k.id)?.color ?? k.color ?? '#a8a29a',
         thinking: this.#run[k.id].thinking,
         nextAt: this.#run[k.id].nextAt === Infinity ? null : this.#run[k.id].nextAt,

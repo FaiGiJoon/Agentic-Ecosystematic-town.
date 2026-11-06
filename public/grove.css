@@ -327,3 +327,54 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
   #mode .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* icon only; still read out */
   #mode { width: 44px; padding: 0; justify-content: center; }
 }
+
+/* --- owner dashboard: a one-page monitor over the grove ------------------------------------ */
+#dash { position: fixed; inset: 0; z-index: 40; background: rgba(8, 12, 18, 0.88); backdrop-filter: blur(6px); overflow: auto; color: var(--ink, #e8eef5); }
+#dash[hidden] { display: none; }
+.dash-wrap { max-width: 1180px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 32px; display: grid; gap: 12px; }
+.dash-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dash-head h2 { margin: 0; font: 700 20px var(--sans); }
+.dash-sub { color: var(--muted); font: 400 12px var(--mono); }
+.dash-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; font: 400 12px var(--mono); color: var(--muted); }
+.dash-actions a, .linkbtn { color: var(--mint); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+#dash-export { background: var(--mint); color: var(--mint-ink); padding: 0 16px; }
+#dash-export:disabled { opacity: 0.7; }
+.dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.dcard, .dash-box { background: rgba(20, 28, 40, 0.92); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px 14px; }
+.dcard { border-left: 4px solid #4fbf7a; }
+.dcard.warning { border-left-color: var(--orange); }
+.dcard.problem { border-left-color: var(--red); }
+.dtop { display: flex; align-items: center; justify-content: space-between; font: 700 16px var(--sans); }
+.dtop b { color: var(--c); }
+.dlight { font: 700 11px var(--mono); padding: 2px 8px; border-radius: 99px; background: #2c7a4b; color: #eafff1; }
+.dlight.warning { background: #9a6412; color: #fff4e0; }
+.dlight.problem { background: #a33838; color: #ffecec; }
+.dnow { margin: 6px 0 8px; font: 500 14px var(--sans); }
+.dmeters { display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px; align-items: center; font: 400 11px var(--mono); color: var(--muted); margin-bottom: 6px; }
+.dbar { display: block; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.dbar i { display: block; height: 100%; }
+.dline { font: 400 12px/1.5 var(--mono); color: var(--muted); }
+.dline.dneed { color: var(--orange); }
+.dash-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.dash-box h3 { margin: 0 0 8px; font: 700 13px var(--sans); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.dbig { font: 400 14px var(--mono); margin-bottom: 6px; }
+.dbig b { font-size: 18px; color: var(--mint); }
+.dspark { width: 100%; height: 48px; display: block; margin: 4px 0 8px; }
+.dspark rect { fill: var(--mint); opacity: 0.85; }
+.dlist { list-style: none; margin: 0 0 6px; padding: 0; font: 400 12px/1.7 var(--mono); }
+.dlist .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dhabit { margin-bottom: 10px; }
+.dstack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 4px 0; gap: 1px; }
+.dstack i { display: block; background: var(--mint); }
+.dstack i:nth-child(2n) { background: var(--gold); }
+.dstack i:nth-child(3n) { background: var(--orange); }
+.dstack i:nth-child(5n) { background: #8fb3ff; }
+.dash-problems .dlist li { padding: 2px 0; }
+.dsetup { font: 400 13px/1.6 var(--sans); margin: 8px 0 0; padding-left: 20px; }
+.dfeed { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; font: 400 12px/1.5 var(--mono); }
+.dfeed li { display: grid; grid-template-columns: 48px 70px 70px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+.dfeed .t, .dfeed .k { color: var(--muted); }
+.dfeed li.think .x { color: #c9b8ff; font-style: italic; }
+.dfeed li.error .x { color: var(--red); }
+.dfeed li.learn .x, .dfeed li.grow .x { color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { #dash { backdrop-filter: none; } }

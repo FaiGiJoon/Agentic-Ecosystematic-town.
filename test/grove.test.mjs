@@ -371,7 +371,7 @@ test('research at Library Isle: one extra call with web search, the fact remembe
   assert.match(research[0].prompt, /How do koalas find water\?/);
   const crystal = grove.state().koalas.find((k) => k.id === 'crystal');
   assert.match(crystal.learned.at(-1), /^Koalas get most of their water/);
-  assert.ok(crystal.learned.at(-1).length <= 200);
+  assert.ok(crystal.learned.at(-1).length <= 280);
   assert.ok(!crystal.memories.some((m) => /their water/.test(m)), 'facts go to learned, not memories');
   assert.match(crystal.recent.join(' '), /We could build a well/);
   assert.equal(grove.state().usage.byKoala.crystal.today.calls, 2, 'the research call is metered too');
@@ -438,12 +438,12 @@ test('review: no read call once the daily cap is reached', async () => {
   assert.ok(!calls.some((c) => c.kind === 'read'));
 });
 
-test('research anywhere but Library Isle is refused without a call', async () => {
+test('research away from the library and books is refused without a call', async () => {
   const { grove, calls, advance } = setup({ decide: () => ({ ok: true, raw: { action: 'research', target: 'Why is the sky blue?' }, usage: USAGE }) });
   grove.play();
   await openRound(grove, advance, 5000);
   assert.ok(!calls.some((c) => c.kind === 'research'));
-  assert.match(grove.state().koalas[0].recent.join(' '), /only at Library Isle/);
+  assert.match(grove.state().koalas[0].recent.join(' '), /only at the library or somewhere with books/);
 });
 
 test('review: talking nudges the friend and koalas nearby, not everyone in the grove', async () => {
